@@ -4,6 +4,6 @@ These files contain some workflows based on (NiPyPe)[http://www.mit.edu/~satra/n
 The 'own_nipype' modules contains nodes with extensions for NiPyPe that are used in these workflows. 
 
 
-written by Joe Bathelt, PhD MSc
-MRC Cognition & Brain Sciences Unit
+written by Joe Bathelt, PhD MSc  
+MRC Cognition & Brain Sciences Unit  
 Cambridge, UK 
