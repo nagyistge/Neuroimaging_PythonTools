@@ -8,7 +8,7 @@ __dwi_preproc__: script for advanced pre-processing of diffusin-weighted volumes
 __dwi_preproc_minimal__: script for standard preprocessing of diffusion-weighted volumes  
 __dwi_preproc_restore__: tensor fitting using the RESTORE algorithm for motion correction  
 __CSD_determininistic_tractography__: reconstruction of a CSD model with deterministic tracking for whole-brain tractography  
-__CSD_determininistic_tractography__: reconstruction of a CSD model with probabilistic tracking for whole-brain tractography  
+__CSD_probabilistic_tractography__: reconstruction of a CSD model with probabilistic tracking for whole-brain tractography  
 __DTI_calculate_RD__: function to calculate radial diffusivity  
 __CSD_probabilistic_tractography_MRTrix__: reconstruction of the CSD model and probabilistic whole-brain tractography using MRTrix functions  
 __FA_connectome__: calculate a structural connectome that expresses the connection weighte between two regions as FA  
