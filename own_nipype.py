@@ -1,4 +1,4 @@
-from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, traits, File, TraitedSpec
+from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, traits, File, TraitedSpec
 
 #==================================================================================================
 # Denoising with non-local means
@@ -308,7 +308,6 @@ class CSDprob(BaseInterface):
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
 		import os 
-
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -316,23 +315,51 @@ class CSDprob(BaseInterface):
 		return outputs
 
 
-from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, traits, File, TraitedSpec
+#==================================================================================================
+# Moving tracts to a different space
+class trk_CoregInputSpec(CommandLineInputSpec):
+	in_file = File(exists=True, desc='whole-brain tractography in .trk format', 
+		mandatory=True, position = 0, argstr="%s")
+	output_file = File("coreg_tracks.trk", desc="whole-brain tractography in coregistered space", 
+		position=1, argstr="%s", usedefault=True)
+	FA_file = File(exists=True, desc='FA file in the same space as the .trk file', 
+		mandatory=True, position = 2, argstr="-src %s")
+	reference = File(exists=True, desc='Image that the .trk file will be registered to', 
+		mandatory=True, position = 3, argstr="-ref %s")
+	transfomation_matrix = File(exists=True, desc='FSL matrix with transform form original to new space', 
+		mandatory=True, position = 4, argstr="-reg %s")
+
+class trk_CoregOutputSpec(TraitedSpec):
+	transformed_track_file = File(exists=True, desc="whole-brain tractography in new space")
+
+class trk_Coreg(CommandLine):
+	input_spec = trk_CoregInputSpec
+	output_spec = trk_CoregOutputSpec
+
+	_cmd = "track_transform"
+
+	def _list_outputs(self):#
+		import os 
+		outputs = self.output_spec().get()
+		outputs['transformed_track_file'] = os.path.abspath(self.inputs.output_file)
+		return outputs
+
 
 #==================================================================================================
 # FA connectome construction
 
-class DipyDenoiseInputSpec(BaseInterfaceInputSpec):
+class FAconnectomeInputSpec(BaseInterfaceInputSpec):
 	trackfile = File(exists=True, desc='whole-brain tractography in .trk format', mandatory=True)
 	ROI_file = File(exists=True, desc='image containing the ROIs', mandatory=True)
 	FA_file = File(exists=True, desc='fractional anisotropy map in the same soace as the track file', mandatory=True)
-	FA2structural_matrix = File(exists=True, desc='FSL transformation matrix that maps from native to common space', mandatory=True)
+	output_file = File("FA_matrix.txt", desc="Adjacency matrix of ROIs with FA as conenction weight", usedefault=True)
 
-class DipyDenoiseOutputSpec(TraitedSpec):
+class FAconnectomeOutputSpec(TraitedSpec):
 	out_file = File(exists=True, desc="connectivity matrix of FA between each pair of ROIs")
 
-class DipyDenoise(BaseInterface):
-	input_spec = DipyDenoiseInputSpec
-	output_spec = DipyDenoiseOutputSpec
+class FAconnectome(BaseInterface):
+	input_spec = FAconnectomeInputSpec
+	output_spec = FAconnectomeOutputSpec
 
 	def _run_interface(self, runtime):
 		# Loading the ROI file
@@ -340,18 +367,18 @@ class DipyDenoise(BaseInterface):
 	    import numpy as np
 	    from dipy.tracking import utils 
 
-	    img = nib.load(ROI_file)
+	    img = nib.load(self.inputs.ROI_file)
 	    data = img.get_data()
 	    affine = img.get_affine()
 
 	    # Getting the FA file
-	    img = nib.load(FA_file)
+	    img = nib.load(self.inputs.FA_file)
 	    FA_data = img.get_data()
 	    FA_affine = img.get_affine()
 
 	    # Loading the streamlines
 	    from nibabel import trackvis
-	    streams, hdr = trackvis.read(trackfile,points_space='rasmm')
+	    streams, hdr = trackvis.read(self.inputs.trackfile,points_space='rasmm')
 	    streamlines = [s[0] for s in streams]
 	    streamlines_affine = trackvis.aff_from_hdr(hdr,atleast_v2=True)
 
@@ -372,14 +399,17 @@ class DipyDenoise(BaseInterface):
 
 	    FA_matrix[np.tril_indices(n=len(FA_matrix))] = 0
 	    FA_matrix = FA_matrix.T + FA_matrix - np.diagonal(FA_matrix)
-	    np.savetxt(base + '_FA_matrix.txt',delimiter='\t')
+
+	    from nipype.utils.filemanip import split_filename
+	    _, base, _ = split_filename(self.inputs.trackfile)
+	    np.savetxt(base + '_FA_matrix.txt',FA_matrix,delimiter='\t')
 	    return runtime
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
 		import os 
 		outputs = self._outputs().get()
-		fname = self.inputs.in_file
+		fname = self.inputs.trackfile
 		_, base, _ = split_filename(fname)
 		outputs["out_file"] = os.path.abspath(base + '_FA_matrix.txt')
 		return outputs
