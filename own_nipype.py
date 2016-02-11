@@ -344,7 +344,41 @@ class trk_Coreg(CommandLine):
 		outputs['transformed_track_file'] = os.path.abspath(self.inputs.output_file)
 		return outputs
 
+#==================================================================================================
+# Extract b0
+class Extractb0InputSpec(BaseInterfaceInputSpec):
+	in_file = File(exists=True, desc='diffusion-weighted image (4D)', mandatory=True)
 
+class Extractb0OutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc="First volume of the dwi file")
+
+class Extractb0(BaseInterface):
+	input_spec = Extractb0InputSpec
+	output_spec = Extractb0OutputSpec
+
+	def _run_interface(self, runtime):
+		import nibabel as nib
+		img = nib.load(self.inputs.in_file)
+		data = img.get_data()
+		affine = img.get_affine()
+
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		nib.save(nib.Nifti1Image(data[...,0],affine),os.path.abspath(base + '_b0.nii.gz'))
+		return runtime
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base + '_b0.nii.gz')
+		return outputs
+			
 #==================================================================================================
 # FA connectome construction
 
@@ -382,8 +416,19 @@ class FAconnectome(BaseInterface):
 	    streamlines = [s[0] for s in streams]
 	    streamlines_affine = trackvis.aff_from_hdr(hdr,atleast_v2=True)
 
+	    # Checking for negative values
+	    from dipy.tracking._utils import _mapping_to_voxel, _to_voxel_coordinates
+	    endpoints = [sl[0::len(sl)-1] for sl in streamlines]
+	    lin_T, offset = _mapping_to_voxel(affine, (1.,1.,1.))
+	    inds = np.dot(endpoints, lin_T)
+	    inds += offset
+	    negative_values = np.where(inds <0)[0]
+	    for negative_value in sorted(negative_values, reverse=True):
+			del streamlines[negative_value]
+
 	    # Constructing the streamlines matrix
 	    matrix,mapping = utils.connectivity_matrix(streamlines=streamlines,label_volume=data,affine=streamlines_affine,symmetric=True,return_mapping=True,mapping_as_streamlines=True)
+	    matrix[matrix < 10] = 0
 
 	    # Constructing the FA matrix
 	    dimensions = matrix.shape
@@ -392,8 +437,8 @@ class FAconnectome(BaseInterface):
 	    for i in range(0,dimensions[0]):
 	        for j in range(0,dimensions[1]):
 	            if matrix[i,j]:
-	                dm = utils.density_map(mapping[i,j], data.shape, affine=streamlines_affine)
-	                FA_matrix[i,j] = np.mean(FA_data[dm>0])
+	                dm = utils.density_map(mapping[i,j], FA_data.shape, affine=streamlines_affine)
+            		FA_matrix[i,j] = np.mean(FA_data[dm>0])
 	            else:
 	                FA_matrix[i,j] = 0
 

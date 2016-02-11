@@ -682,12 +682,13 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	from own_nipype import DipyDenoise as denoise
 	from own_nipype import trk_Coreg as trkcoreg
 	from own_nipype import FAconnectome as connectome
+	from own_nipype import Extractb0 as extract_b0
 	import nipype.interfaces.diffusion_toolkit as dtk
 	import nipype.algorithms.misc as misc
 
 	from nipype import SelectFiles
 	import os
-	registration_reference = os.environ['FSLDIR'] + '/data/standard/FMRIB58_FA_1mm.nii.gz'
+	registration_reference = os.environ['FSLDIR'] + '/data/standard/MNI152_T1_1mm_brain.nii.gz'
 	nodes = list()
 
 	#====================================
@@ -722,9 +723,7 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	resample = pe.Node(interface=dipy.Resample(interp=3,vox_size=(1.,1.,1.)), name='resample')
 
 	# Extract b0 image
-	fslroi = pe.Node(interface=fsl.ExtractROI(),name='extract_b0')
-	fslroi.inputs.t_min=0
-	fslroi.inputs.t_size=1
+	extract_b0 = pe.Node(interface=extract_b0(),name='extract_b0')
 
 	# Fitting the diffusion tensor model
 	dwi2tensor = pe.Node(interface=mrt.DWI2Tensor(), name='dwi2tensor')
@@ -782,11 +781,11 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	# Eddy current and motion correction
 	fa_connectome.connect(denoise, 'out_file',eddycorrect, 'in_file')
 	fa_connectome.connect(eddycorrect, 'eddy_corrected', resample, 'in_file')
-	fa_connectome.connect(resample, 'out_file', fslroi, 'in_file')
+	fa_connectome.connect(resample, 'out_file', extract_b0, 'in_file')
 	fa_connectome.connect(resample, 'out_file', gunzip,'in_file')
 
 	# Brain extraction
-	fa_connectome.connect(fslroi, 'roi_file', bet, 'in_file')
+	fa_connectome.connect(extract_b0, 'out_file', bet, 'in_file')
 
 	# Creating tensor maps
 	fa_connectome.connect(selectfiles,'bval',fsl2mrtrix,'bval_file')
@@ -847,4 +846,4 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	# Running the workflow
 	fa_connectome.base_dir = os.path.abspath(out_directory)
 	fa_connectome.write_graph()
-	fa_connectome.run(plugin='PBS')
+	fa_connectome.run(plugin='MultiProc')
