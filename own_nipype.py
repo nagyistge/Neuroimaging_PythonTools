@@ -1,4 +1,5 @@
 from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, traits, File, TraitedSpec
+from nipype.interfaces.matlab import MatlabCommand
 
 #==================================================================================================
 # Denoising with non-local means
@@ -458,3 +459,102 @@ class FAconnectome(BaseInterface):
 		_, base, _ = split_filename(fname)
 		outputs["out_file"] = os.path.abspath(base + '_FA_matrix.txt')
 		return outputs
+
+
+#==================================================================================================
+# Convert an adjacency matrix in txt format to NetworkX pck format
+
+class TXT2PCKInputSpec(BaseInterfaceInputSpec):
+	in_file = File(exists=True, desc='adjacency matrix in txt format', mandatory=True)
+
+class TXT2PCKOutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc="NetworkX file in pck format")
+
+class TXT2PCK(BaseInterface):
+	input_spec = TXT2PCKInputSpec
+	output_spec = TXT2PCKOutputSpec
+
+	def _run_interface(self, runtime):
+		# Reading the matrix file
+		import numpy as np
+		import networkx as nx
+
+		adjacency_matrix = np.loadtxt(self.inputs.in_file)
+		G = nx.from_numpy_matrix(adjacency_matrix)
+
+		from nipype.utils.filemanip import split_filename
+		_, base, _ = split_filename(self.inputs.in_file)
+		nx.write_gpickle(G,path=base + '.pck')
+		return runtime
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base + '.pck')
+		return outputs
+
+#==================================================================================================
+# Calling fsl_anat on T1 files
+class FSLANATInputSpec(BaseInterfaceInputSpec):
+	in_file = File(exists=True, desc='input structural image', mandatory=True)
+	out_directory = File(exist=True, desc="output directory")
+
+class FSLANATOutputSpec(TraitedSpec):
+	fsl_anat_directory = traits.Directory(exists=True, desc="folder with processed T1 files")
+
+class FSLANAT(BaseInterface):
+	input_spec = FSLANATInputSpec
+	output_spec = FSLANATOutputSpec
+
+	def _run_interface(self, runtime):
+		from subprocess import call
+		subject = self.inputs.in_file.split('/')[-1].split('.')[0].split('_')[0]
+		cmd = "fsl_anat --noreg --nononlinreg --noseg --nosubcortseg -i " + self.inputs.in_file + ' -o ' + self.inputs.out_directory + subject
+		call(cmd,shell=True)
+
+		return runtime
+
+	def _list_outputs(self):
+		import os 
+		outputs = self.output_spec().get()
+		subject = self.inputs.in_file.split('/')[-1].split('.')[0].split('_')[0]
+		outputs['fsl_anat_directory'] = os.path.abspath(self.inputs.out_directory + subject + '.anat/')
+		return outputs
+
+#==================================================================================================
+# Wavelet Despiking
+import os
+from string import Template
+
+class WaveletDespikeInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True)
+    subject_id = traits.String(mandatory=True)
+    out_folder = File(mandatory=True)
+
+class WaveletDespikeOutputSpec(TraitedSpec):
+    out_folder = File(exists=True)
+
+class WaveletDespike(BaseInterface):
+    input_spec = WaveletDespikeInputSpec
+    output_spec = WaveletDespikeOutputSpec
+
+    def _run_interface(self, runtime):
+        d = dict(in_file=self.inputs.in_file,
+        out_folder=self.inputs.out_folder,
+        subject_id=self.inputs.subject_id)
+        #this is your MATLAB code template
+        script = Template("""
+        	cd '$out_folder'
+        	WaveletDespike('$in_file','$subject_id')""").substitute(d)
+
+        mlab = MatlabCommand(script=script, mfile=True)
+        result = mlab.run()
+        return result.runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        outputs['out_file'] = os.path.abspath(self.inputs.out_folder)
+        return outputs
