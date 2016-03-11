@@ -131,3 +131,97 @@ def GM_covariance_matrix(subject_list,base_directory,out_directory):
 	covar_mat.base_dir = os.path.abspath(out_directory)
 	covar_mat.write_graph()
 	covar_mat.run('PBSGraph')
+
+def ANTs_cortical_thickness(subject_list,directory):
+	"""
+
+	"""
+	#==============================================================
+	# Loading required packages
+	import nipype.interfaces.io as nio
+	import nipype.pipeline.engine as pe
+	import nipype.interfaces.utility as util
+	from nipype.interfaces.ants.segmentation import antsCorticalThickness
+
+	from nipype import SelectFiles
+	import os
+
+	#====================================
+	# Defining the nodes for the workflow
+
+	# Getting the subject ID
+	infosource  = pe.Node(interface=util.IdentityInterface(fields=['subject_id']),name='infosource')
+	infosource.iterables = ('subject_id', subject_list)
+
+	# Getting the relevant diffusion-weighted data
+	templates = dict(T1='{subject_id}')
+
+	selectfiles = pe.Node(SelectFiles(templates),
+	                   name="selectfiles")
+	selectfiles.inputs.base_directory = os.path.abspath(directory)
+
+	corticalthickness = pe.Node(interface=antsCorticalThickness(), name='corticalthickness')
+	corticalthickness.inputs.brain_probability_mask = '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/T_template0_BrainCerebellumProbabilityMask.nii.gz'
+	corticalthickness.inputs.brain_template= '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/T_template0.nii.gz'
+	corticalthickness.inputs.segmentation_priors = ['/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/Priors2/priors1.nii.gz',
+	                                                '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/Priors2/priors2.nii.gz',
+	                                                  '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/Priors2/priors3.nii.gz',
+	                                                  '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/Priors2/priors4.nii.gz',
+	                                                   '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/Priors2/priors5.nii.gz',
+	                                                '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/Priors2/priors6.nii.gz']
+	corticalthickness.inputs.extraction_registration_mask = '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/T_template0_BrainCerebellumExtractionMask.nii.gz'
+	corticalthickness.inputs.t1_registration_template = '/imaging/jb07/Atlases/OASIS/OASIS-30_Atropos_template/T_template0_BrainCerebellum.nii.gz'
+
+	#====================================
+	# Setting up the workflow
+	antsthickness = pe.Workflow(name='antsthickness')
+
+	antsthickness.connect(infosource, 'subject_id', selectfiles, 'subject_id')
+	antsthickness.connect(selectfiles, 'T1', corticalthickness, 'anatomical_image')
+	antsthickness.connect(infosource, 'subject_id', corticalthickness, 'out_prefix')
+
+	#====================================
+	# Running the workflow
+	antsthickness.base_dir = os.path.abspath(directory)
+	antsthickness.write_graph()
+	antsthickness.run('PBSGraph')
+
+def coreg_with_FLIRT(subject_list,base_directory):
+	#==============================================================
+	# Loading required packages
+	import nipype.interfaces.io as nio
+	import nipype.pipeline.engine as pe
+	import nipype.interfaces.utility as util
+	from nipype import SelectFiles
+	from nipype.interfaces import fsl
+	import os
+
+	#====================================
+	# Defining the nodes for the workflow
+
+	# Getting the subject ID
+	infosource  = pe.Node(interface=util.IdentityInterface(fields=['subject_id']),name='infosource')
+	infosource.iterables = ('subject_id', subject_list)
+
+	# Getting the relevant diffusion-weighted data
+	templates = dict(in_file='{subject_id}.nii.gz')
+
+	selectfiles = pe.Node(SelectFiles(templates),
+	                   name="selectfiles")
+	selectfiles.inputs.base_directory = os.path.abspath(base_directory)
+
+	flt = pe.Node(interface=fsl.FLIRT(dof=6, cost_func='corratio'), name='flt')
+	flt.inputs.reference = '/home/jb07/CBU_DTI_scripts/fsl/data/standard/MNI152_T1_1mm.nii.gz'
+
+	#====================================
+	# Setting up the workflow
+	flt_coreg = pe.Workflow(name='flt_coreg')
+
+	flt_coreg.connect(infosource, 'subject_id', selectfiles, 'subject_id')
+	flt_coreg.connect(selectfiles, 'in_file', flt, 'in_file')
+
+	#====================================
+	# Running the workflow
+	flt_coreg.base_dir = os.path.abspath(base_directory)
+	flt_coreg.write_graph()
+	flt_coreg.run('PBSGraph')
