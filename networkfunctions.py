@@ -51,6 +51,8 @@ def plot_network(network):
 
 def plot_community_matrix(network, community_affiliation):
     import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    import numpy as np
 
     sorting_array = sorted(range(len(community_affiliation)), key=lambda k: community_affiliation[k])
     sorted_network = network[sorting_array, :]
@@ -58,7 +60,30 @@ def plot_community_matrix(network, community_affiliation):
     plt.imshow(sorted_network, 
                cmap='jet',
                interpolation='none',
-               vmin=-1, vmax=1)
+               vmin=0, vmax=1)
+
+    ax = plt.gca()
+    total_size = 0 
+    for community in np.unique(community_affiliation):
+        size = sum(sorted(community_affiliation) == community)
+        ax.add_patch( patches.Rectangle(
+                (total_size, total_size),   
+                size,          
+                size,         
+                fill = False,
+                edgecolor = 'w',
+                alpha = None,
+                linewidth = 1
+            )
+        )
+        total_size += size
+
+    ax.set_xticks(np.arange(0, len(network), 1))  
+    ax.set_yticks(np.arange(0, len(network), 1))  
+    ax.grid(linewidth=0.2, color='w', alpha=0.5)
+    ax.set_xticklabels(' ')
+    ax.set_yticklabels(' ')
+
     cb = plt.colorbar()
     cb.set_label('Pearson correlation coefficient R')
     cb.ax.yaxis.set_label_position('left')
