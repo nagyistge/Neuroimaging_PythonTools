@@ -11,6 +11,7 @@ def get_consensus_module_assignment(network, iterations):
     outputs:
     vector of module assignment for each node
     """
+
     import numpy as np
     consensus_matrices = list()
 
@@ -29,16 +30,27 @@ def get_consensus_module_assignment(network, iterations):
 
     return (modules, q)
 
-def get_consensus_matrix(network):
-    import bct
-    import numpy as np
-    modules,q = bct.modularity_louvain_und_sign(network, qtype='smp')
-    module_matrix = np.repeat(modules,repeats=network.shape[0])
-    module_matrix = np.reshape(module_matrix,newshape=network.shape)
-    consensus_matrix = module_matrix == module_matrix.transpose()
-    return (consensus_matrix.astype('float'), modules, q)
+    def get_consensus_matrix(network):
+        import bct
+        import numpy as np
+        modules,q = bct.modularity_louvain_und_sign(network, qtype='smp')
+        module_matrix = np.repeat(modules,repeats=network.shape[0])
+        module_matrix = np.reshape(module_matrix,newshape=network.shape)
+        consensus_matrix = module_matrix == module_matrix.transpose()
+        return (consensus_matrix.astype('float'), modules, q)
 
 def plot_network(network):
+    #================================
+    # Plot an adjacency matrix of a network
+    #================================
+    """
+    inputs:
+    network: adjacency_matrix (NumPy array)
+
+    outputs:
+    matplotlib figure of adjancency matrix
+    """
+
     import matplotlib.pyplot as plt
     
     plt.imshow(network, 
@@ -50,6 +62,18 @@ def plot_network(network):
     cb.ax.yaxis.set_label_position('left')
 
 def plot_community_matrix(network, community_affiliation):
+    #================================
+    # Plot a community matrix
+    #================================
+    """
+    inputs:
+    network: adjacency_matrix (NumPy array)
+    community_affiliation: array that indicates which community/module an node belongs to
+
+    outputs:
+    matplotlib figure of adjancency matrix order by modules, lines indicate community boundaries
+    """
+
     import matplotlib.pyplot as plt
     import matplotlib.patches as patches
     import numpy as np
@@ -89,6 +113,20 @@ def plot_community_matrix(network, community_affiliation):
     cb.ax.yaxis.set_label_position('left')
 
 def random_network_with_modules(size, number_of_modules, p_in, p_out):
+    #================================
+    # Generate a random network with modules
+    #================================
+    """
+    inputs:
+    size: number of nodes
+    number_of_modules: number of modules
+    p_in: connection probability within modules
+    p_out: connection probability ouside modules
+
+    outputs:
+    random network with modular structure
+    """
+
     import numpy as np
 
     module_size = round(float(size)/number_of_modules)
@@ -113,3 +151,52 @@ def random_network_with_modules(size, number_of_modules, p_in, p_out):
                     matrix[int(j),int(i)] = random_weight
                     
     return matrix
+
+def get_connection_densities(network, community_affiliation):
+    #================================
+    # Get density of within and between module connections
+    #================================
+    """
+    inputs:
+    network: adjacency_matrix (NumPy array)
+    community_affiliation: array that indicates which community/module an node belongs to
+
+    outputs:
+    density of connections within modules
+    density of connections between modules
+    """
+
+    import networkx as nx
+    
+    network[network > 0] = 1. # binarizing the network
+    
+    G = nx.from_numpy_matrix(network) # original network
+    for node in G.nodes():
+         G.node[node]['community'] = community_affiliation[node]
+
+    within_weights = list()
+    between_weights = list()
+
+    for edge in G.edges():
+        if G.node[edge[0]]['community'] == G.node[edge[1]]['community']:
+            within_weights.append(G.edge[edge[0]][edge[1]]['weight'])
+        else:
+            between_weights.append(G.edge[edge[0]][edge[1]]['weight'])
+
+    connected_G = nx.from_numpy_matrix(np.ones(shape=network.shape)) # fully-connected network
+    full_within_weights = list()
+    full_between_weights = list()
+
+    for node in connected_G.nodes():
+         connected_G.node[node]['community'] = community_affiliation[node]
+
+    for edge in connected_G.edges():
+        if connected_G.node[edge[0]]['community'] == connected_G.node[edge[1]]['community']:
+            full_within_weights.append(connected_G.edge[edge[0]][edge[1]]['weight'])
+        else:
+            full_between_weights.append(connected_G.edge[edge[0]][edge[1]]['weight'])
+
+    within_density = sum(within_weights)/sum(full_within_weights)
+    between_density = sum(between_weights)/sum(full_between_weights)
+    
+    return(within_density, between_density)
