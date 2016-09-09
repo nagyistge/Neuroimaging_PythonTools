@@ -30,14 +30,14 @@ def get_consensus_module_assignment(network, iterations):
 
     return (modules, q)
 
-    def get_consensus_matrix(network):
-        import bct
-        import numpy as np
-        modules,q = bct.modularity_louvain_und_sign(network, qtype='smp')
-        module_matrix = np.repeat(modules,repeats=network.shape[0])
-        module_matrix = np.reshape(module_matrix,newshape=network.shape)
-        consensus_matrix = module_matrix == module_matrix.transpose()
-        return (consensus_matrix.astype('float'), modules, q)
+def get_consensus_matrix(network):
+    import bct
+    import numpy as np
+    modules,q = bct.modularity_louvain_und_sign(network, qtype='smp')
+    module_matrix = np.repeat(modules,repeats=network.shape[0])
+    module_matrix = np.reshape(module_matrix,newshape=network.shape)
+    consensus_matrix = module_matrix == module_matrix.transpose()
+    return (consensus_matrix.astype('float'), modules, q)
 
 def plot_network(network):
     #================================
@@ -152,6 +152,25 @@ def random_network_with_modules(size, number_of_modules, p_in, p_out):
                     
     return matrix
 
+def add_noise(network, percentage_noise):
+    #================================
+    # Add noise to an adjacency matrix
+    #================================
+    """
+    inputs:
+    network: adjacency_matrix (NumPy array)
+    percentage_noise: percentage of Gaussian noise
+
+    outputs:
+    network adjacency matrix with added noise
+    """
+
+    import numpy as np
+
+    network_wNoise = (1-(float(percentage_noise)/100))*network + (float(percentage_noise)/100)*np.random.normal(0, 1, network.shape)
+
+    return network_wNoise
+
 def get_connection_densities(network, community_affiliation):
     #================================
     # Get density of within and between module connections
@@ -167,6 +186,7 @@ def get_connection_densities(network, community_affiliation):
     """
 
     import networkx as nx
+    import numpy as np
     
     network[network > 0] = 1. # binarizing the network
     

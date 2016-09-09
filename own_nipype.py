@@ -558,3 +558,264 @@ class WaveletDespike(BaseInterface):
         outputs = self._outputs().get()
         outputs['out_file'] = os.path.abspath(self.inputs.out_folder)
         return outputs
+
+        
+#==================================================================================================
+# Calling ANTs Quick Registration with SyN
+class ants_QuickSyNInputSpec(CommandLineInputSpec):
+	fixed_image = File(exists=True, desc='Fixed image or source image or reference image', 
+		mandatory=True, argstr="-f %s")
+	moving_image = File(exists=True, desc="Moving image or target image", 
+		mandatory=True, argstr="-m %s")
+	image_dimensions = traits.Enum(1,3,exists=True, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)', 
+		mandatory=True, argstr="-d %d")
+	output_prefix = traits.Str(exists=True, desc='OutputPrefix: A prefix that is prepended to all output files', 
+		mandatory=True, argstr="-o %s_")
+	transform_type = traits.Str("s", desc='transform type', 
+		mandatory=False, argstr="-t %s", usedefault=True)
+
+class ants_QuickSyNOutputSpec(TraitedSpec):
+	deformation_warp_image = File(desc="Outputs deformation warp image")
+	inverse_deformation_warp_image = File(desc="Outputs inverse deformation warp image")
+	warped_image = File(desc="Outputs warped images")
+	inverse_warped_image = File(desc="Outputs the inverse of the warped image")
+	transform_matrix = File(desc="Outputs affine transform matrix")
+
+class ants_QuickSyN(CommandLine):
+	input_spec = ants_QuickSyNInputSpec
+	output_spec = ants_QuickSyNOutputSpec
+
+	_cmd = "antsRegistrationSyNQuick.sh"
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		outputs['deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1Warp.nii.gz')
+		outputs['inverse_deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1InverseWarp.nii.gz')
+		outputs['warped_image'] = os.path.abspath(self.inputs.output_prefix + '_Warped.nii.gz')
+		outputs['inverse_warped_image'] = os.path.abspath(self.inputs.output_prefix + '_InverseWarped.nii.gz')
+		outputs['transform_matrix'] = os.path.abspath(self.inputs.output_prefix + '_0GenericAffine.mat')
+		return outputs
+
+#==================================================================================================
+# Calling ANTs Apply Transform
+class ants_QuickSyNInputSpec(CommandLineInputSpec):
+	input_file = File(exists=True, desc='File name of the input image', argstr="-i %s")
+	reference_image = File(exists=True, desc='For warping input images, the reference image defines the spacing, origin, size, and direction of the output warped image.',
+						mandatory=True, argstr="-r %s")
+	output_prefix = traits.Str(desc='OutputPrefix: A prefix that is prepended to all output files', 
+		mandatory=True, argstr="-o %s_")
+	interpolation = traits.Str(desc='one of Linear, NearestNeighbor, MultiLabel[<sigma=imageSpacing>,<alpha=4.0>], Gaussian[<sigma=imageSpacing>,<alpha=1.0>], BSpline[<order=3>], CosineWindowedSinc, WelchWindowedSinc, HammingWindowedSinc, LanczosWindowedSinc',
+								mandatory=True, argstr="-n %s")
+	transform = traits.Str(desc='transform files in order of application', 
+						 mandatory=True, argstr="-t %s")
+	image_dimensions = traits.Enum(1,3, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)', 
+		mandatory=True, argstr="-d %d")
+	input_image_type = traits.Enum(0,3, desc='Option specifying the input image type of scalar (default), vector, tensor, or time series',
+		mandatory=True, argstr="-e %d")
+
+class ants_QuickSyNOutputSpec(TraitedSpec):
+	deformation_warp_image = File(desc="Outputs deformation warp image")
+	inverse_deformation_warp_image = File(desc="Outputs inverse deformation warp image")
+	warped_image = File(desc="Outputs warped images")
+	inverse_warped_image = File(desc="Outputs the inverse of the warped image")
+	transform_matrix = File(desc="Outputs affine transform matrix")
+
+class ants_QuickSyN(CommandLine):
+	input_spec = ants_QuickSyNInputSpec
+	output_spec = ants_QuickSyNOutputSpec
+
+	_cmd = "antsRegistrationSyNQuick.sh"
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		outputs['deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1Warp.nii.gz')
+		outputs['inverse_deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1InverseWarp.nii.gz')
+		outputs['warped_image'] = os.path.abspath(self.inputs.output_prefix + '_Warped.nii.gz')
+		outputs['inverse_warped_image'] = os.path.abspath(self.inputs.output_prefix + '_InverseWarped.nii.gz')
+		outputs['transform_matrix'] = os.path.abspath(self.inputs.output_prefix + '_0GenericAffine.mat')
+		return outputs
+
+
+#==================================================================================================
+# Regressing signal within a mask
+# This is intended for regressing the signal within a CSF or ventricle mask
+
+class RegressMaskInputSpec(BaseInterfaceInputSpec):
+	in_file = File(exists=True, desc='4D time series volume', mandatory=True)
+	mask_filename = File(exists=True, desc='Binary brain mask', mandatory=True)
+	atlas_filename = File(exists=True, desc='3D atlas segmentation file', mandatory=True)
+	atlas_key = traits.Float(desc='Number associated with the ROI', mandatory=True)
+
+class RegressMaskOutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc="4D time series volume of residuals")
+
+class RegressMask(BaseInterface):
+	input_spec = RegressMaskInputSpec
+	output_spec = RegressMaskOutputSpec
+
+	def _run_interface(self, runtime):
+		from nilearn.input_data import NiftiMasker, NiftiLabelsMasker
+		from nipype.utils.filemanip import split_filename
+		import nibabel as nib
+		import os 
+
+		functional_filename = self.inputs.in_file
+		atlas_filename = self.inputs.atlas_filename
+		mask_filename = self.inputs.mask_filename
+
+		# Extracting the ROI signals 
+		masker = NiftiLabelsMasker(labels_img=atlas_filename, 
+                           background_label = 0,
+                           standardize=True,
+                           detrend = True,
+                           verbose = 1
+                           )
+		time_series = masker.fit_transform(functional_filename)
+
+		# Removing the ROI signal from the time series
+		nifti_masker = NiftiMasker(mask_img=mask_filename)
+		masked_data = nifti_masker.fit_transform(functional_filename, confounds=time_series[...,0])
+		masked_img = nifti_masker.inverse_transform(masked_data)
+
+		# Saving the result to disk
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		nib.save(masked_img, os.path.abspath(base + '_regressed.nii.gz'))
+		return runtime
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base + '_regressed.nii.gz')
+		return outputs
+
+#==================================================================================================
+# Wrapper for the mat2det function from ENIGMA (http://enigma.ini.usc.edu/protocols/imaging-protocols/protocol-for-brain-and-intracranial-volumes/)
+
+class MAT2DETInputSpec(BaseInterfaceInputSpec):
+	in_matrix = File(exists=True, desc='input transfomration matrix', mandatory=True)
+	subject_id = traits.String(desc='output file with the intracranial value', mandatory=True)
+
+class MAT2DETOutputSpec(TraitedSpec):
+	out_file = File(desc="output value of intracranial volume")
+
+class MAT2DET(BaseInterface):
+	input_spec = MAT2DETInputSpec
+	output_spec = MAT2DETOutputSpec
+
+	def _run_interface(self, runtime):
+		from subprocess import call
+		from nipype.utils.filemanip import split_filename
+
+		outputs = self._outputs().get()
+		fname = self.inputs.in_matrix
+		_, base, _ = split_filename(fname)
+		cmd = "mat2det " + self.inputs.in_matrix + ' > ' +  self.inputs.subject_id + '_ICV.txt'
+		call(cmd,shell=True)
+		return runtime
+
+	def _list_outputs(self):
+		import os 
+		from nipype.utils.filemanip import split_filename
+
+		outputs = self.output_spec().get()
+		fname = self.inputs.in_matrix
+		_, base, _ = split_filename(fname)
+		outputs['out_file'] = os.path.abspath(base + self.inputs.subject_id + '_ICV.txt')
+		return outputs
+
+#==================================================================================================
+# Function to generate a grey matter density image from antsCorticalThickness output
+
+class GM_DENSITYInputSpec(BaseInterfaceInputSpec):
+	in_file = File(exists=True, desc='input brain image file in subject space', mandatory=True)
+	mask_file = traits.String(desc='input file of GM matter segmentation posterior', mandatory=True)
+
+class GM_DENSITYOutputSpec(TraitedSpec):
+	out_file = File(desc="GM density image")
+
+class GM_DENSITY(BaseInterface):
+	input_spec = GM_DENSITYInputSpec
+	output_spec = GM_DENSITYOutputSpec
+
+	def _run_interface(self, runtime):
+		import nibabel as nib
+		from nipype.utils.filemanip import split_filename
+		import os 
+
+		brain_image = nib.load(self.inputs.in_file)
+		brain = brain_image.get_data()
+		affine = brain_image.get_affine()
+
+		segmentation_mask = nib.load(self.inputs.mask_file)
+		mask = segmentation_mask.get_data()
+		mask[mask > 0.1] = 1
+		mask[mask < 0.1] = 0
+
+		GM_density = brain*mask
+
+		# Saving the result to disk
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		nib.save(nib.Nifti1Image(GM_density, affine), os.path.abspath(base + '_gm_density.nii.gz'))
+
+		return runtime
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base + '_gm_density.nii.gz')
+		return outputs
+
+#==================================================================================================
+# Denoising with non-local means
+class ImageOverlapInputSpec(BaseInterfaceInputSpec):
+	in_file1 = File(exists=True, desc='input  image file', mandatory=True)
+	in_file2 = traits.String(desc='input  image file', mandatory=True)
+
+class ImageOverlapOutputSpec(TraitedSpec):
+	out_file = File(desc="overlap image")
+
+class ImageOverlap(BaseInterface):
+	input_spec = ImageOverlapInputSpec
+	output_spec = ImageOverlapOutputSpec
+
+	def _run_interface(self, runtime):
+		import nibabel as nib
+		from nipype.utils.filemanip import split_filename
+
+		in_file1 = nib.load(self.inputs.in_file1).get_data()
+		in_file2 = nib.load(self.inputs.in_file2).get_data()
+		in_file1[in_file1 > 0] = 1 # binarzing the image
+		in_file2[in_file2 > 0] = 1 # binarzing the image
+		overlap = in_file1*in_file2
+		overlap[overlap > 0] = 1
+
+		# Saving the result to disk
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file1
+		_, base, _ = split_filename(fname)
+		nib.save(nib.Nifti1Image(overlap, nib.load(self.inputs.in_file1).get_affine()), os.path.abspath(base + '_overlap.nii.gz'))
+
+		return runtime
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os 
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file1
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base + '_overlap.nii.gz')
+		return outputs
