@@ -154,14 +154,15 @@ def frontal_connectivity(subject_list, base_directory, out_directory):
     MNI_to_dwi_flt.inputs.in_file = os.environ[
         'FSLDIR'] + '/data/standard/MNI152_T1_1mm_brain.nii.gz'
 
-    MNI_to_dwi_applyxfm = pe.Node(fsl.ApplyXfm(
-        apply_xfm=True), name='MNI_to_dwi_applyxfm')
-    MNI_to_dwi_threshold = pe.Node(interface=fsl.maths.Threshold(
-        thresh=0.9), name='MNI_to_dwi_threshold')
-    MNI_to_dwi_applyxfm2 = pe.Node(fsl.ApplyXfm(
-        apply_xfm=True), name='MNI_to_dwi_applyxfm2')
-    MNI_to_dwi_threshold2 = pe.Node(interface=fsl.maths.Threshold(
-        thresh=0.9), name='MNI_to_dwi_threshold2')
+    MNI_to_dwi_applyxfm_seed = pe.Node(fsl.ApplyXfm(
+        apply_xfm=True), name='MNI_to_dwi_applyxfm_seed')
+    MNI_to_dwi_threshold_seed = pe.Node(interface=fsl.maths.Threshold(
+        thresh=0.9), name='MNI_to_dwi_threshold_seed')
+
+    MNI_to_dwi_applyxfm_target = pe.Node(fsl.ApplyXfm(
+        apply_xfm=True), name='MNI_to_dwi_applyxfm_target')
+    MNI_to_dwi_threshold_target = pe.Node(interface=fsl.maths.Threshold(
+        thresh=0.9), name='MNI_to_dwi_threshold_target')
 
     # Multiplying the masks
     multiply = pe.Node(interface=fsl.maths.BinaryMaths(
@@ -221,29 +222,33 @@ def frontal_connectivity(subject_list, base_directory, out_directory):
     frontal_connectivity.connect(
         fslroi, 'roi_file', MNI_to_dwi_flt, 'reference')
     frontal_connectivity.connect(
-        frontalROI, 'frontalROI', MNI_to_dwi_applyxfm, 'in_file')
+        frontalROI, 'frontalROI', MNI_to_dwi_applyxfm_seed, 'in_file')
     frontal_connectivity.connect(
-        fslroi, 'roi_file', MNI_to_dwi_applyxfm, 'reference')
+        fslroi, 'roi_file', MNI_to_dwi_applyxfm_seed, 'reference')
     frontal_connectivity.connect(
-        MNI_to_dwi_flt, 'out_matrix_file', MNI_to_dwi_applyxfm, 'in_matrix_file')
+        MNI_to_dwi_flt, 'out_matrix_file',
+        MNI_to_dwi_applyxfm_seed, 'in_matrix_file')
     frontal_connectivity.connect(
-        MNI_to_dwi_applyxfm, 'out_file', MNI_to_dwi_threshold, 'in_file')
+        MNI_to_dwi_applyxfm_seed, 'out_file',
+        MNI_to_dwi_threshold_seed, 'in_file')
     frontal_connectivity.connect(
-        targetROI, 'targetROI', MNI_to_dwi_applyxfm2, 'in_file')
+        targetROI, 'targetROI', MNI_to_dwi_applyxfm_target, 'in_file')
     frontal_connectivity.connect(
-        fslroi, 'roi_file', MNI_to_dwi_applyxfm2, 'reference')
+        fslroi, 'roi_file', MNI_to_dwi_applyxfm_target, 'reference')
     frontal_connectivity.connect(
-        MNI_to_dwi_flt, 'out_matrix_file', MNI_to_dwi_applyxfm2, 'in_matrix_file')
+        MNI_to_dwi_flt, 'out_matrix_file',
+        MNI_to_dwi_applyxfm_target, 'in_matrix_file')
     frontal_connectivity.connect(
-        MNI_to_dwi_applyxfm2, 'out_file', MNI_to_dwi_threshold2, 'in_file')
+        MNI_to_dwi_applyxfm_target, 'out_file',
+        MNI_to_dwi_threshold_target, 'in_file')
     frontal_connectivity.connect(
         T1_to_dwi_applyxfm, 'out_file', multiply, 'in_file')
     frontal_connectivity.connect(
-        MNI_to_dwi_threshold, 'out_file', multiply, 'operand_file')
+        MNI_to_dwi_threshold_seed, 'out_file', multiply, 'operand_file')
     frontal_connectivity.connect(
         T1_to_dwi_applyxfm, 'out_file', multiply2, 'in_file')
     frontal_connectivity.connect(
-        MNI_to_dwi_threshold2, 'out_file', multiply2, 'operand_file')
+        MNI_to_dwi_threshold_target, 'out_file', multiply2, 'operand_file')
 
     # DWI processing
     frontal_connectivity.connect(selectfiles, 'dwi', denoise, 'in_file')
