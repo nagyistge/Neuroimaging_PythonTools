@@ -351,11 +351,11 @@ def CSD_deterministic_tractography(subject_list,base_directory,out_directory):
 	dtifit = pe.Node(interface=fsl.DTIFit(),name='dtifit')
 	nodes.append(dtifit)
 
-	# CSD deterministic tractography 
+	# CSD deterministic tractography
 	csdet = pe.Node(interface=csdet(),name='csdet')
 	nodes.append(csdet)
 
-	# smoothing the tracts 
+	# smoothing the tracts
 	smooth = pe.Node(interface=dtk.SplineFilter(step_length=0.5), name='smooth')
 	nodes.append(smooth)
 
@@ -449,11 +449,11 @@ def CSD_probablistic_tractography(subject_list,base_directory,out_directory):
 	dtifit = pe.Node(interface=fsl.DTIFit(),name='dtifit')
 	nodes.append(dtifit)
 
-	# CSD probabilistic tractography 
+	# CSD probabilistic tractography
 	csdprob = pe.Node(interface=csdprob(),name='csdprob')
 	nodes.append(csdprob)
 
-	# smoothing the tracts 
+	# smoothing the tracts
 	smooth = pe.Node(interface=dtk.SplineFilter(step_length=0.5), name='smooth')
 	nodes.append(smooth)
 
@@ -491,7 +491,7 @@ def CSD_probablistic_tractography(subject_list,base_directory,out_directory):
 
 def DTI_calculate_RD(subject_list,base_directory):
 	import nibabel as nib
-	import os 
+	import os
 
 	for subject in subject_list:
 		subject = subject.split('_')[-1]
@@ -583,17 +583,17 @@ def CSD_probablistic_tractography_MRTrix(subject_list,base_directory,out_directo
 	gen_WM_mask = pe.Node(interface=mrt.GenerateWhiteMatterMask(), name='gen_WM_mask')
 	threshold_wmmask = pe.Node(interface=mrt.Threshold(absolute_threshold_value = 0.4), name='threshold_wmmask')
 
-	# CSD probabilistic tractography 
+	# CSD probabilistic tractography
 	estimateresponse = pe.Node(interface=mrt.EstimateResponseForSH(maximum_harmonic_order = 8), name='estimateresponse')
 	csdeconv = pe.Node(interface=mrt.ConstrainedSphericalDeconvolution(maximum_harmonic_order = 8), name='csdeconv')
 
-	# Tracking 
+	# Tracking
 	probCSDstreamtrack = pe.Node(interface=mrt.ProbabilisticSphericallyDeconvolutedStreamlineTrack(), name='probCSDstreamtrack')
 	probCSDstreamtrack.inputs.inputmodel = 'SD_PROB'
 	probCSDstreamtrack.inputs.desired_number_of_tracks = 150000
 	tck2trk = pe.Node(interface=mrt.MRTrix2TrackVis(), name='tck2trk')
 
-	# smoothing the tracts 
+	# smoothing the tracts
 	smooth = pe.Node(interface=dtk.SplineFilter(step_length=0.5), name='smooth')
 	nodes.append(smooth)
 
@@ -745,17 +745,17 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	gen_WM_mask = pe.Node(interface=mrt.GenerateWhiteMatterMask(), name='gen_WM_mask')
 	threshold_wmmask = pe.Node(interface=mrt.Threshold(absolute_threshold_value = 0.4), name='threshold_wmmask')
 
-	# CSD probabilistic tractography 
+	# CSD probabilistic tractography
 	estimateresponse = pe.Node(interface=mrt.EstimateResponseForSH(maximum_harmonic_order = 8), name='estimateresponse')
 	csdeconv = pe.Node(interface=mrt.ConstrainedSphericalDeconvolution(maximum_harmonic_order = 8), name='csdeconv')
 
-	# Tracking 
+	# Tracking
 	probCSDstreamtrack = pe.Node(interface=mrt.ProbabilisticSphericallyDeconvolutedStreamlineTrack(), name='probCSDstreamtrack')
 	probCSDstreamtrack.inputs.inputmodel = 'SD_PROB'
 	probCSDstreamtrack.inputs.desired_number_of_tracks = 150000
 	tck2trk = pe.Node(interface=mrt.MRTrix2TrackVis(), name='tck2trk')
 
-	# smoothing the tracts 
+	# smoothing the tracts
 	smooth = pe.Node(interface=dtk.SplineFilter(step_length=0.5), name='smooth')
 
 	# Co-registration with MNI space
@@ -765,7 +765,7 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	# Moving tracts to common space
 	trkcoreg = pe.Node(interface=trkcoreg(reference=registration_reference),name='trkcoreg')
 
-	# calcuating the connectome matrix 
+	# calcuating the connectome matrix
 	calc_matrix = pe.Node(interface=connectome(ROI_file='/home/jb07/Desktop/aal.nii.gz'),name='calc_matrix')
 
 	#====================================
@@ -831,7 +831,7 @@ def FA_connectome(subject_list,base_directory,out_directory):
 	# Smoothing the trackfile
 	fa_connectome.connect(tck2trk, 'out_file',smooth,'track_file')
 
-	# Co-registering FA with FMRIB58_FA_1mm standard space 
+	# Co-registering FA with FMRIB58_FA_1mm standard space
 	fa_connectome.connect(MRmultiply,'out_file',mrconvert,'in_file')
 	fa_connectome.connect(mrconvert,'converted',flt,'in_file')
 	fa_connectome.connect(smooth,'smoothed_track_file',trkcoreg,'in_file')

@@ -1,11 +1,12 @@
-#========================================================================
-# Visualizing the expression pattern on the cortical surface
+#Visualizing the expression pattern on the cortical surface
 
-def generate_FreeSurferLUT(labels,data,mapname,filename):
+def generate_FreeSurferLUT(labels, data, mapname, filename):
+
+
 	"""
-	This function generates a colour look-up table to be used with FreeSurfer. 
-	It needs the values to be plotted and the labels corresponding to their anatomical location. 
-	It further accepts an input for the colour map to be used for plotting - see matplotlib documentation for accepted names. 
+	This function generates a colour look-up table to be used with FreeSurfer.
+	It needs the values to be plotted and the labels corresponding to their anatomical location.
+	It further accepts an input for the colour map to be used for plotting - see matplotlib documentation for accepted names.
 
 
 	written by Joe Bathelt, PhD
@@ -14,7 +15,7 @@ def generate_FreeSurferLUT(labels,data,mapname,filename):
     import matplotlib as mpl
     import matplotlib.cm as cm
     import pandas as pd
-    
+
     # Mapping the data to a colour map
     norm = mpl.colors.Normalize(vmin=np.min(data), vmax=np.max(data))
     cmap = eval('cm.' + mapname)
@@ -22,8 +23,8 @@ def generate_FreeSurferLUT(labels,data,mapname,filename):
     colormap = m.to_rgba(data)
     colormap[:,0:3] = np.asarray(colormap[:,0:3]*255)
     colormap = np.array(colormap).astype('int')
-    
-    # Creating a dataframe with the labels and colour values 
+
+    # Creating a dataframe with the labels and colour values
     df = pd.DataFrame(colormap,columns=['R','G','B','A'])
     df['Label'] = labels
     df = df[['Label','R','G','B','A']]
@@ -38,7 +39,7 @@ def FreeSurfer_LUT_for_gene(gene):
 	written by Joe Bathelt, PhD
 	MRC Cognition & Brain Sciences Unit
 	"""
-	
+
 	# Loading the expression information
 	import pandas as pd
 	import numpy as np
