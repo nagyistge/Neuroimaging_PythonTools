@@ -1,4 +1,4 @@
-from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, traits, File, TraitedSpec
+from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, InputMultiPath, traits, File, TraitedSpec
 from nipype.interfaces.matlab import MatlabCommand
 
 #==================================================================================================
@@ -28,13 +28,13 @@ class DipyDenoise(BaseInterface):
 		data = img.get_data()
 		affine = img.get_affine()
 		mask = data[..., 0] > 80
-		a = data.shape 
+		a = data.shape
 
 		denoised_data = np.ndarray(shape=data.shape)
 		for image in range(0,a[3]):
 		    print(str(image + 1) + '/' + str(a[3] + 1))
 		    dat = data[...,image]
-		    sigma = np.std(dat[~mask]) # Calculating the standard deviation of the noise 
+		    sigma = np.std(dat[~mask]) # Calculating the standard deviation of the noise
 		    den = nlmeans(dat, sigma=sigma, mask=mask)
 		    denoised_data[:,:,:,image] = den
 
@@ -45,7 +45,7 @@ class DipyDenoise(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -96,7 +96,7 @@ class DipyRestore(BaseInterface):
 		return runtime
 
 	def _list_outputs(self):
-		import os 
+		import os
 		from nipype.utils.filemanip import split_filename
 
 		outputs = self._outputs().get()
@@ -117,7 +117,7 @@ class CSDdetInputSpec(BaseInterfaceInputSpec):
 	brain_mask = File(exists=True, desc='FA map', mandatory=True)
 
 class CSDdetOutputSpec(TraitedSpec):
-	out_file = File(exists=True, desc="streamline trackfile")	
+	out_file = File(exists=True, desc="streamline trackfile")
 
 class CSDdet(BaseInterface):
 	input_spec = CSDdetInputSpec
@@ -203,7 +203,7 @@ class CSDdet(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
@@ -222,7 +222,7 @@ class CSDprobInputSpec(BaseInterfaceInputSpec):
 	brain_mask = File(exists=True, desc='FA map', mandatory=True)
 
 class CSDprobOutputSpec(TraitedSpec):
-	out_file = File(exists=True, desc="streamline trackfile")	
+	out_file = File(exists=True, desc="streamline trackfile")
 
 class CSDprob(BaseInterface):
 	input_spec = CSDdetInputSpec
@@ -308,7 +308,7 @@ class CSDprob(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -319,15 +319,15 @@ class CSDprob(BaseInterface):
 #==================================================================================================
 # Moving tracts to a different space
 class trk_CoregInputSpec(CommandLineInputSpec):
-	in_file = File(exists=True, desc='whole-brain tractography in .trk format', 
+	in_file = File(exists=True, desc='whole-brain tractography in .trk format',
 		mandatory=True, position = 0, argstr="%s")
-	output_file = File("coreg_tracks.trk", desc="whole-brain tractography in coregistered space", 
+	output_file = File("coreg_tracks.trk", desc="whole-brain tractography in coregistered space",
 		position=1, argstr="%s", usedefault=True)
-	FA_file = File(exists=True, desc='FA file in the same space as the .trk file', 
+	FA_file = File(exists=True, desc='FA file in the same space as the .trk file',
 		mandatory=True, position = 2, argstr="-src %s")
-	reference = File(exists=True, desc='Image that the .trk file will be registered to', 
+	reference = File(exists=True, desc='Image that the .trk file will be registered to',
 		mandatory=True, position = 3, argstr="-ref %s")
-	transfomation_matrix = File(exists=True, desc='FSL matrix with transform form original to new space', 
+	transfomation_matrix = File(exists=True, desc='FSL matrix with transform form original to new space',
 		mandatory=True, position = 4, argstr="-reg %s")
 
 class trk_CoregOutputSpec(TraitedSpec):
@@ -340,7 +340,7 @@ class trk_Coreg(CommandLine):
 	_cmd = "track_transform"
 
 	def _list_outputs(self):#
-		import os 
+		import os
 		outputs = self.output_spec().get()
 		outputs['transformed_track_file'] = os.path.abspath(self.inputs.output_file)
 		return outputs
@@ -364,7 +364,7 @@ class Extractb0(BaseInterface):
 		affine = img.get_affine()
 
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -373,13 +373,13 @@ class Extractb0(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
 		outputs["out_file"] = os.path.abspath(base + '_b0.nii.gz')
 		return outputs
-			
+
 #==================================================================================================
 # FA connectome construction
 
@@ -400,7 +400,7 @@ class FAconnectome(BaseInterface):
 		# Loading the ROI file
 	    import nibabel as nib
 	    import numpy as np
-	    from dipy.tracking import utils 
+	    from dipy.tracking import utils
 
 	    img = nib.load(self.inputs.ROI_file)
 	    data = img.get_data()
@@ -453,7 +453,7 @@ class FAconnectome(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.trackfile
 		_, base, _ = split_filename(fname)
@@ -489,7 +489,7 @@ class TXT2PCK(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -518,7 +518,7 @@ class FSLANAT(BaseInterface):
 		return runtime
 
 	def _list_outputs(self):
-		import os 
+		import os
 		outputs = self.output_spec().get()
 		subject = self.inputs.in_file.split('/')[-1].split('.')[0].split('_')[0]
 		outputs['fsl_anat_directory'] = os.path.abspath(self.inputs.out_directory + subject + '.anat/')
@@ -559,19 +559,19 @@ class WaveletDespike(BaseInterface):
         outputs['out_file'] = os.path.abspath(self.inputs.out_folder)
         return outputs
 
-        
+
 #==================================================================================================
 # Calling ANTs Quick Registration with SyN
 class ants_QuickSyNInputSpec(CommandLineInputSpec):
-	fixed_image = File(exists=True, desc='Fixed image or source image or reference image', 
+	fixed_image = File(exists=True, desc='Fixed image or source image or reference image',
 		mandatory=True, argstr="-f %s")
-	moving_image = File(exists=True, desc="Moving image or target image", 
+	moving_image = File(exists=True, desc="Moving image or target image",
 		mandatory=True, argstr="-m %s")
-	image_dimensions = traits.Enum(1,3,exists=True, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)', 
+	image_dimensions = traits.Enum(1,3,exists=True, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)',
 		mandatory=True, argstr="-d %d")
-	output_prefix = traits.Str(exists=True, desc='OutputPrefix: A prefix that is prepended to all output files', 
+	output_prefix = traits.Str(exists=True, desc='OutputPrefix: A prefix that is prepended to all output files',
 		mandatory=True, argstr="-o %s_")
-	transform_type = traits.Str("s", desc='transform type', 
+	transform_type = traits.Str("s", desc='transform type',
 		mandatory=False, argstr="-t %s", usedefault=True)
 
 class ants_QuickSyNOutputSpec(TraitedSpec):
@@ -589,7 +589,7 @@ class ants_QuickSyN(CommandLine):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		outputs['deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1Warp.nii.gz')
 		outputs['inverse_deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1InverseWarp.nii.gz')
@@ -604,13 +604,13 @@ class ants_QuickSyNInputSpec(CommandLineInputSpec):
 	input_file = File(exists=True, desc='File name of the input image', argstr="-i %s")
 	reference_image = File(exists=True, desc='For warping input images, the reference image defines the spacing, origin, size, and direction of the output warped image.',
 						mandatory=True, argstr="-r %s")
-	output_prefix = traits.Str(desc='OutputPrefix: A prefix that is prepended to all output files', 
+	output_prefix = traits.Str(desc='OutputPrefix: A prefix that is prepended to all output files',
 		mandatory=True, argstr="-o %s_")
 	interpolation = traits.Str(desc='one of Linear, NearestNeighbor, MultiLabel[<sigma=imageSpacing>,<alpha=4.0>], Gaussian[<sigma=imageSpacing>,<alpha=1.0>], BSpline[<order=3>], CosineWindowedSinc, WelchWindowedSinc, HammingWindowedSinc, LanczosWindowedSinc',
 								mandatory=True, argstr="-n %s")
-	transform = traits.Str(desc='transform files in order of application', 
+	transform = traits.Str(desc='transform files in order of application',
 						 mandatory=True, argstr="-t %s")
-	image_dimensions = traits.Enum(1,3, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)', 
+	image_dimensions = traits.Enum(1,3, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)',
 		mandatory=True, argstr="-d %d")
 	input_image_type = traits.Enum(0,3, desc='Option specifying the input image type of scalar (default), vector, tensor, or time series',
 		mandatory=True, argstr="-e %d")
@@ -630,7 +630,7 @@ class ants_QuickSyN(CommandLine):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		outputs['deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1Warp.nii.gz')
 		outputs['inverse_deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1InverseWarp.nii.gz')
@@ -661,14 +661,14 @@ class RegressMask(BaseInterface):
 		from nilearn.input_data import NiftiMasker, NiftiLabelsMasker
 		from nipype.utils.filemanip import split_filename
 		import nibabel as nib
-		import os 
+		import os
 
 		functional_filename = self.inputs.in_file
 		atlas_filename = self.inputs.atlas_filename
 		mask_filename = self.inputs.mask_filename
 
-		# Extracting the ROI signals 
-		masker = NiftiLabelsMasker(labels_img=atlas_filename, 
+		# Extracting the ROI signals
+		masker = NiftiLabelsMasker(labels_img=atlas_filename,
                            background_label = 0,
                            standardize=True,
                            detrend = True,
@@ -690,7 +690,7 @@ class RegressMask(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -723,7 +723,7 @@ class MAT2DET(BaseInterface):
 		return runtime
 
 	def _list_outputs(self):
-		import os 
+		import os
 		from nipype.utils.filemanip import split_filename
 
 		outputs = self.output_spec().get()
@@ -749,7 +749,7 @@ class GM_DENSITY(BaseInterface):
 	def _run_interface(self, runtime):
 		import nibabel as nib
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 
 		brain_image = nib.load(self.inputs.in_file)
 		brain = brain_image.get_data()
@@ -772,7 +772,7 @@ class GM_DENSITY(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
@@ -813,9 +813,83 @@ class ImageOverlap(BaseInterface):
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
-		import os 
+		import os
 		outputs = self._outputs().get()
 		fname = self.inputs.in_file1
 		_, base, _ = split_filename(fname)
 		outputs["out_file"] = os.path.abspath(base + '_overlap.nii.gz')
 		return outputs
+
+class AdditionalDTIMeasuresInputSpec(BaseInterfaceInputSpec):
+    L1 = File(exists=True, desc='First eigenvalue image', mandatory=True)
+    L2 = File(exists=True, desc='Second eigenvalue image', mandatory=True)
+    L3 = File(exists=True, desc='Third eigenvalue image', mandatory=True)
+
+class AdditionalDTIMeasuresOutputSpec(TraitedSpec):
+    AD = File(exists=True, desc="axial diffusivity (AD) image")
+    RD = File(exists=True, desc="radial diffusivity (RD) image")
+
+class AdditionalDTIMeasures(BaseInterface):
+    input_spec = AdditionalDTIMeasuresInputSpec
+    output_spec = AdditionalDTIMeasuresOutputSpec
+
+    def _run_interface(self, runtime):
+    	import nibabel as nib
+        from nipype.utils.filemanip import split_filename
+
+
+        L1 = nib.load(self.inputs.L1).get_data()
+        L2 = nib.load(self.inputs.L2).get_data()
+        L3 = nib.load(self.inputs.L3).get_data()
+        affine = nib.load(self.inputs.L1).get_affine()
+
+        RD = (L2 + L3)/2
+
+        fname = self.inputs.L1
+        _, base, _ = split_filename(fname)
+        nib.save(nib.Nifti1Image(L1, affine), base + '_AD.nii')
+        nib.save(nib.Nifti1Image(RD, affine), base + '_RD.nii')
+        return runtime
+
+    def _list_outputs(self):
+        from nipype.utils.filemanip import split_filename
+        import os
+        outputs = self._outputs().get()
+        fname = self.inputs.L1
+        _, base, _ = split_filename(fname)
+        outputs["AD"] = os.path.abspath(base + '_AD.nii')
+        outputs["RD"] = os.path.abspath(base + '_RD.nii')
+        return outputs
+
+#==================================================================================================
+
+class FSRenameInputSpec(BaseInterfaceInputSpec):
+    out_directory = traits.String(desc='directory with FreeSurfer folder', mandatory=True)
+    subject_id = traits.String(desc='subject ID', mandatory=True)
+
+class FSRenameOutputSpec(TraitedSpec):
+    brainmaskauto = File(exists=True, desc="thresholded volume")
+    brainmask = File(exists=True, desc="thresholded volume")
+
+class FSRename(BaseInterface):
+    input_spec = FSRenameInputSpec
+    output_spec = FSRenameOutputSpec
+
+    def _run_interface(self, runtime):
+        import shutil
+        out_directory = self.inputs.out_directory
+        subject_id = self.inputs.subject_id
+
+        shutil.copyfile(out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/T1.mgz', out_directory + '/freesurfer_pipeline/' +  '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.auto.mgz')
+
+        shutil.copyfile(out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/T1.mgz', out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.mgz')
+
+        return runtime
+
+    def _list_outputs(self):
+        outputs = self._outputs().get()
+        out_directory = self.inputs.out_directory
+        subject_id = self.inputs.subject_id
+        outputs["brainmaskauto"] = os.path.abspath(out_directory + '/freesurfer_pipeline/' +  '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.auto.mgz')
+        outputs["brainmask"] = os.path.abspath(out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.mgz')
+        return outputs

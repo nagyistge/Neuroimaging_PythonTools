@@ -69,6 +69,7 @@ def frontal_connectivity(subject_list, base_directory, out_directory):
     atlas_data[atlas_data == 2] = 99
     atlas_data[atlas_data < 6] = 0
     atlas_data[atlas_data > 0] = 1
+    number_of_voxels = len(atlas_data[atlas_data == 1])
     nib.save(nib.Nifti1Image(atlas_data, atlas_affine),
              out_directory + '/frontal_connectivity/targetROIs.nii.gz')
 
@@ -172,9 +173,10 @@ def frontal_connectivity(subject_list, base_directory, out_directory):
 
     # Tracking
     probCSDstreamtrack = pe.Node(
-        interface=mrt.ProbabilisticSphericallyDeconvolutedStreamlineTrack(), name='probCSDstreamtrack')
+        interface=mrt.ProbabilisticSphericallyDeconvolutedStreamlineTrack(),
+        name='probCSDstreamtrack')
     probCSDstreamtrack.inputs.inputmodel = 'SD_PROB'
-    probCSDstreamtrack.inputs.desired_number_of_tracks = 1870415000
+    probCSDstreamtrack.inputs.desired_number_of_tracks = number_of_voxels*100
     tck2trk = pe.Node(interface=mrt.MRTrix2TrackVis(), name='tck2trk')
 
     # Converting to a density image
@@ -191,7 +193,6 @@ def frontal_connectivity(subject_list, base_directory, out_directory):
     dwi_to_MNI_applyxfm.inputs.reference = os.environ[
         'FSLDIR'] + '/data/standard/MNI152_T1_1mm_brain.nii.gz'
 
-    #====================================
     # Setting up the workflow
     frontal_connectivity = pe.Workflow(name='frontal_connectivity')
 
