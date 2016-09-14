@@ -3,9 +3,10 @@ def FreeSurfer_Pipeline(subject_list, base_directory, out_directory, template_di
     # Loading required packages
     from nipype.interfaces.ants import N4BiasFieldCorrection
     from nipype.interfaces.ants.segmentation import BrainExtraction
+    import nipype.interfaces.dipy as dipy
     from nipype.interfaces.freesurfer import ReconAll
     import nipype.interfaces.fsl as fsl
-    import nipype.interfaces.dipy as dipy
+    import nipype.interfaces.io as nio
     import nipype.interfaces.utility as util
     from nipype import SelectFiles
     import nipype.pipeline.engine as pe
@@ -13,7 +14,6 @@ def FreeSurfer_Pipeline(subject_list, base_directory, out_directory, template_di
     from own_nipype import DipyDenoise
     from own_nipype import DipyDenoiseT1
     from own_nipype import FSRename
-    from own_nipype import ants_QuickSyN
     import os
 
     # ====================================
@@ -64,6 +64,10 @@ def FreeSurfer_Pipeline(subject_list, base_directory, out_directory, template_di
     autorecon3 = pe.Node(interface=ReconAll(), name='autorecon3')
     autorecon3.inputs.directive = 'autorecon3'
 
+    # DataSink
+    datasink = pe.Node(interface=nio.DataSink(), name='datasink')
+    datasink.inputs.base_directory = out_directory
+
     # ==================================================================
     # Processing of diffusion-weighted data
     # Denoising
@@ -90,13 +94,6 @@ def FreeSurfer_Pipeline(subject_list, base_directory, out_directory, template_di
     # Getting AD and RD
     get_rd = pe.Node(interface=AdditionalDTIMeasures(), name='get_rd')
 
-    # Calculating transform from subject to common space
-    quicksyn = pe.Node(interface=ants_QuickSyN(), name='quicksyn')
-    quicksyn.inputs.fixed_image = template_directory + '/T_template_BrainCerebellum.nii.gz'
-    quicksyn.inputs.image_dimensions = 3
-    quicksyn.inputs.output_prefix = 'NKIspace_'
-    quicksyn.inputs.transform_type = 's'
-
     # ==================================================================
     # Processing of diffusion-weighted data
 
@@ -110,6 +107,8 @@ def FreeSurfer_Pipeline(subject_list, base_directory, out_directory, template_di
     freesurfer_pipeline.connect(robustfov, 'out_roi', T1_denoise, 'in_file')
     freesurfer_pipeline.connect(T1_denoise, 'out_file', n4, 'input_image')
     freesurfer_pipeline.connect(n4, 'output_image', brainextraction, 'anatomical_image')
+
+    """
     freesurfer_pipeline.connect(infosource, 'subject_id', autorecon1, 'subject_id')
     freesurfer_pipeline.connect(brainextraction, 'BrainExtractionBrain', autorecon1, 'T1_files')
     freesurfer_pipeline.connect(infosource, 'subject_id', rename, 'subject_id')
@@ -132,8 +131,18 @@ def FreeSurfer_Pipeline(subject_list, base_directory, out_directory, template_di
     freesurfer_pipeline.connect(dtifit, 'L1', get_rd, 'L1')
     freesurfer_pipeline.connect(dtifit, 'L2', get_rd, 'L2')
     freesurfer_pipeline.connect(dtifit, 'L3', get_rd, 'L3')
-    freesurfer_pipeline.connect(dtifit, 'FA', quicksyn, 'moving_image')
 
+    # Moving files to the output directory
+    freesurfer_pipeline.connect(infosource, 'subject_id', datasink, 'container')
+    freesurfer_pipeline.connect(dtifit, 'FA', datasink, 'FA')
+    freesurfer_pipeline.connect(dtifit, 'MD', datasink, 'MD')
+    freesurfer_pipeline.connect(get_rd, 'RD', datasink, 'RD')
+    freesurfer_pipeline.connect(get_rd, 'AD', datasink, 'AD')
+    freesurfer_pipeline.connect(autorecon3, 'curv', datasink, 'curvature')
+    freesurfer_pipeline.connect(autorecon3, 'thickness', datasink, 'thickness')
+    freesurfer_pipeline.connect(autorecon3, 'sulc', datasink, 'sulcal_depth')
+    freesurfer_pipeline.connect(autorecon3, 'volume', datasink, 'volume')
+    """
     # ==================================================================
     # Running the workflow
     freesurfer_pipeline.base_dir = os.path.abspath(out_directory)

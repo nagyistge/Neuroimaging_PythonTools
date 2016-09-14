@@ -76,7 +76,7 @@ class DipyDenoiseT1(BaseInterface):
 		img = nib.load(fname)
 		data = img.get_data()
 		affine = img.get_affine()
-		mask = data > 50
+		mask = data > 20
 
 		sigma = np.std(data[~mask]) # Calculating the standard deviation of the noise
 		denoised_data = nlmeans(data, sigma=sigma, mask=mask)
