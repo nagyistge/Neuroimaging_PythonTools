@@ -1,7 +1,7 @@
 from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, InputMultiPath, traits, File, TraitedSpec
 from nipype.interfaces.matlab import MatlabCommand
 
-#==================================================================================================
+#=======================================================================
 # Denoising with non-local means
 # This function is based on the example in the Dipy preprocessing tutorial:
 # http://nipy.org/dipy/examples_built/denoise_nlmeans.html#example-denoise-nlmeans
@@ -19,7 +19,6 @@ class DipyDenoise(BaseInterface):
 	def _run_interface(self, runtime):
 		import nibabel as nib
 		import numpy as np
-		import matplotlib.pyplot as plt
 		from dipy.denoise.nlmeans import nlmeans
 		from nipype.utils.filemanip import split_filename
 
@@ -52,7 +51,51 @@ class DipyDenoise(BaseInterface):
 		outputs["out_file"] = os.path.abspath(base + '_denoised.nii')
 		return outputs
 
-#==================================================================================================
+#=======================================================================
+# Denoising with non-local means for 3D images
+# This function is based on the example in the Dipy preprocessing tutorial:
+# http://nipy.org/dipy/examples_built/denoise_nlmeans.html#example-denoise-nlmeans
+
+class DipyDenoiseT1InputSpec(BaseInterfaceInputSpec):
+	in_file = File(exists=True, desc='diffusion weighted volume for denoising', mandatory=True)
+
+class DipyDenoiseT1OutputSpec(TraitedSpec):
+	out_file = File(exists=True, desc="denoised diffusion-weighted volume")
+
+class DipyDenoiseT1(BaseInterface):
+	input_spec = DipyDenoiseT1InputSpec
+	output_spec = DipyDenoiseT1OutputSpec
+
+	def _run_interface(self, runtime):
+		import nibabel as nib
+		import numpy as np
+		from dipy.denoise.nlmeans import nlmeans
+		from nipype.utils.filemanip import split_filename
+
+		fname = self.inputs.in_file
+		img = nib.load(fname)
+		data = img.get_data()
+		affine = img.get_affine()
+		mask = data > 50
+
+		sigma = np.std(data[~mask]) # Calculating the standard deviation of the noise
+		denoised_data = nlmeans(data, sigma=sigma, mask=mask)
+
+		_, base, _ = split_filename(fname)
+		nib.save(nib.Nifti1Image(denoised_data, affine), base + '_denoised.nii')
+
+		return runtime
+
+	def _list_outputs(self):
+		from nipype.utils.filemanip import split_filename
+		import os
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base + '_denoised.nii')
+		return outputs
+
+#=======================================================================
 # Fitting the Tensor models with RESTORE
 
 class DipyRestoreInputSpec(BaseInterfaceInputSpec):
