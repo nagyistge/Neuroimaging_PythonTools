@@ -822,8 +822,9 @@ class GM_DENSITY(BaseInterface):
 		outputs["out_file"] = os.path.abspath(base + '_gm_density.nii.gz')
 		return outputs
 
-#==================================================================================================
-# Denoising with non-local means
+# ======================================================================
+# Calculate the overlap between two masks
+
 class ImageOverlapInputSpec(BaseInterfaceInputSpec):
 	in_file1 = File(exists=True, desc='input  image file', mandatory=True)
 	in_file2 = traits.String(desc='input  image file', mandatory=True)
@@ -863,6 +864,9 @@ class ImageOverlap(BaseInterface):
 		outputs["out_file"] = os.path.abspath(base + '_overlap.nii.gz')
 		return outputs
 
+# ======================================================================
+# This function calculates additional DTI measures, i.e. AD and RD, that FSL dtifi does not automatically generate
+
 class AdditionalDTIMeasuresInputSpec(BaseInterfaceInputSpec):
     L1 = File(exists=True, desc='First eigenvalue image', mandatory=True)
     L2 = File(exists=True, desc='Second eigenvalue image', mandatory=True)
@@ -890,8 +894,8 @@ class AdditionalDTIMeasures(BaseInterface):
 
         fname = self.inputs.L1
         _, base, _ = split_filename(fname)
-        nib.save(nib.Nifti1Image(L1, affine), base + '_AD.nii')
-        nib.save(nib.Nifti1Image(RD, affine), base + '_RD.nii')
+        nib.save(nib.Nifti1Image(L1, affine), base + '_AD.nii.gz')
+        nib.save(nib.Nifti1Image(RD, affine), base + '_RD.nii.gz')
         return runtime
 
     def _list_outputs(self):
@@ -900,19 +904,25 @@ class AdditionalDTIMeasures(BaseInterface):
         outputs = self._outputs().get()
         fname = self.inputs.L1
         _, base, _ = split_filename(fname)
-        outputs["AD"] = os.path.abspath(base + '_AD.nii')
-        outputs["RD"] = os.path.abspath(base + '_RD.nii')
+        outputs["AD"] = os.path.abspath(base + '_AD.nii.gz')
+        outputs["RD"] = os.path.abspath(base + '_RD.nii.gz')
         return outputs
 
-#==================================================================================================
+# ======================================================================
+"""
+Rename files when a skull-stripped image is used in the recon-all pipeline
+"""
 
 class FSRenameInputSpec(BaseInterfaceInputSpec):
-    out_directory = traits.String(desc='directory with FreeSurfer folder', mandatory=True)
+    subjects_dir = traits.String(
+        desc='FreeSurfer subjects directory', mandatory=True)
     subject_id = traits.String(desc='subject ID', mandatory=True)
+
 
 class FSRenameOutputSpec(TraitedSpec):
     brainmaskauto = File(exists=True, desc="thresholded volume")
     brainmask = File(exists=True, desc="thresholded volume")
+
 
 class FSRename(BaseInterface):
     input_spec = FSRenameInputSpec
@@ -920,19 +930,55 @@ class FSRename(BaseInterface):
 
     def _run_interface(self, runtime):
         import shutil
-        out_directory = self.inputs.out_directory
+
+        subjects_dir = self.inputs.subjects_dir
         subject_id = self.inputs.subject_id
 
-        shutil.copyfile(out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/T1.mgz', out_directory + '/freesurfer_pipeline/' +  '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.auto.mgz')
+        shutil.copyfile(subjects_dir + '/' + subject_id + '/mri/T1.mgz',
+                        subjects_dir + '/' + subject_id + subject_id + '/mri/brainmask.auto.mgz')
 
-        shutil.copyfile(out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/T1.mgz', out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.mgz')
+        shutil.copyfile(subjects_dir + '/' + subject_id + subject_id + '/mri/T1.mgz', subjects_dir + '/' + subject_id + '/mri/brainmask.mgz')
 
         return runtime
 
     def _list_outputs(self):
+        import os
+
         outputs = self._outputs().get()
-        out_directory = self.inputs.out_directory
+        subjects_dir = self.inputs.subjects_dir
         subject_id = self.inputs.subject_id
-        outputs["brainmaskauto"] = os.path.abspath(out_directory + '/freesurfer_pipeline/' +  '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.auto.mgz')
-        outputs["brainmask"] = os.path.abspath(out_directory + '/freesurfer_pipeline/' + '_subject_id_' + subject_id + '/autorecon1/' + subject_id + '/mri/brainmask.mgz')
+        outputs["brainmaskauto"] = os.path.abspath(
+           subjects_dir + '/' + subject_id + '/mri/brainmask.auto.mgz')
+        outputs["brainmask"] = os.path.abspath(subjects_dir + '/' + subject_id  + '/mri/brainmask.mgz')
         return outputs
+
+# ======================================================================
+# Calculating the gyrification index from FreeSurfer
+
+class FS_Gyrification_InputSpec(BaseInterfaceInputSpec):
+	subject_id = traits.String(desc='FreeSurfer subject ID', mandatory=True)
+	subjects_dir = traits.String(desc='FreeSurfer subject directory generated by recon-all', mandatory=True)
+
+class FS_Gyrification_OutputSpec(TraitedSpec):
+	lh_gyr = File(exists=True, desc="gyrfication surface morphology for the left hemisphere")
+	rh_gyr = File(exists=True, desc="gyrfication surface morphology for the right hemisphere")
+
+class FS_Gyrification(BaseInterface):
+	input_spec = FS_Gyrification_InputSpec
+	output_spec = FS_Gyrification_OutputSpec
+
+	def _run_interface(self, runtime):
+		from subprocess import call
+
+		cmd = "recon-all -localGI -s " + self.inputs.subject_id + ' -sd ' + self.inputs.subjects_dir
+		call(cmd, shell=True)
+
+		return runtime
+
+	def _list_outputs(self):#
+		outputs = self._outputs().get()
+		subject_directory = self.inputs.subjects_dir
+		subject_id = self.inputs.subject_id
+		outputs['lh_gyr'] = os.path.abspath(subject_directory + '/' +subject_id + '/surf/lh.pial_lgi')
+		outputs['rh_gyr'] = os.path.abspath(subject_directory + '/' + subject_id + '/surf/rh.pial_lgi')
+		return outputs
