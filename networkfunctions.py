@@ -52,8 +52,8 @@ def plot_network(network):
     """
 
     import matplotlib.pyplot as plt
-    
-    plt.imshow(network, 
+
+    plt.imshow(network,
                cmap='jet',
                interpolation='none',
                vmin=-1, vmax=1)
@@ -81,19 +81,19 @@ def plot_community_matrix(network, community_affiliation):
     sorting_array = sorted(range(len(community_affiliation)), key=lambda k: community_affiliation[k])
     sorted_network = network[sorting_array, :]
     sorted_network = sorted_network[:, sorting_array]
-    plt.imshow(sorted_network, 
+    plt.imshow(sorted_network,
                cmap='jet',
                interpolation='none',
                vmin=0, vmax=1)
 
     ax = plt.gca()
-    total_size = 0 
+    total_size = 0
     for community in np.unique(community_affiliation):
         size = sum(sorted(community_affiliation) == community)
         ax.add_patch( patches.Rectangle(
-                (total_size, total_size),   
-                size,          
-                size,         
+                (total_size, total_size),
+                size,
+                size,
                 fill = False,
                 edgecolor = 'w',
                 alpha = None,
@@ -102,8 +102,8 @@ def plot_community_matrix(network, community_affiliation):
         )
         total_size += size
 
-    ax.set_xticks(np.arange(0, len(network), 1))  
-    ax.set_yticks(np.arange(0, len(network), 1))  
+    ax.set_xticks(np.arange(0, len(network), 1))
+    ax.set_yticks(np.arange(0, len(network), 1))
     ax.grid(linewidth=0.2, color='w', alpha=0.5)
     ax.set_xticklabels(' ')
     ax.set_yticklabels(' ')
@@ -131,7 +131,7 @@ def random_network_with_modules(size, number_of_modules, p_in, p_out):
 
     module_size = round(float(size)/number_of_modules)
     matrix = np.zeros(shape=[size,size])
-    
+
     for k in np.arange(0,number_of_modules,1):
         # positive connections
         for i in np.arange(0, module_size, 1):
@@ -149,7 +149,7 @@ def random_network_with_modules(size, number_of_modules, p_in, p_out):
                     random_weight = np.random.uniform(low=0.1, high=1.0)
                     matrix[int(i),int(j)] = random_weight
                     matrix[int(j),int(i)] = random_weight
-                    
+
     return matrix
 
 def add_noise(network, percentage_noise):
@@ -187,9 +187,9 @@ def get_connection_densities(network, community_affiliation):
 
     import networkx as nx
     import numpy as np
-    
+
     network[network > 0] = 1. # binarizing the network
-    
+
     G = nx.from_numpy_matrix(network) # original network
     for node in G.nodes():
          G.node[node]['community'] = community_affiliation[node]
@@ -218,5 +218,108 @@ def get_connection_densities(network, community_affiliation):
 
     within_density = sum(within_weights)/sum(full_within_weights)
     between_density = sum(between_weights)/sum(full_between_weights)
-    
+
     return(within_density, between_density)
+
+def aparc_indices(parcellation_file):
+    """
+    This function returns the indices of ROIs in FreeSurfer's aparc parcellation
+
+    inputs:
+        parcellation_file: Nifti file with the parcellation numbers
+
+    outputs:
+        indices to retain in order of appearance
+    """
+
+    import nibabel as nib
+    import numpy as np
+
+    regions_to_include = {'Left_Thalamus_Proper': 10,
+                         'Left_Caudate': 11,
+                         'Left_Putamen': 12,
+                         'Left_Pallidum': 13,
+                         'Lef_Hippocampus': 17,
+                         'Left_Amygdala': 18,
+                         'Left_Accumbens_area': 26,
+                         'Right_Thalamus_proper': 49,
+                         'Right_Caudate': 50,
+                         'Right_Putamen': 51,
+                         'Right_Pallidum': 52,
+                         'Right_Hippocampus': 53,
+                         'Right_Amygdala': 54,
+                         'Right_Accumbens_area': 58,
+                         'ctx-lh-bankssts': 1001,
+                         'ctx-lh-caudalanteriorcingulate': 1002,
+                         'ctx-lh-caudalmiddlefrontal': 1003,
+                         'ctx-lh-cuneus': 1005,
+                         'ctx-lh-entorhinal': 1006,
+                         'ctx-lh-fusiform': 1007,
+                         'ctx-lh-inferiorparietal': 1008,
+                         'ctx-lh-inferiortemporal': 1009,
+                         'ctx-lh-isthmuscingulate': 1010,
+                         'ctx-lh-lateraloccipital': 1011,
+                         'ctx-lh-lateralorbitofrontal': 1012,
+                         'ctx-lh-lingual': 1013,
+                         'ctx-lh-medialorbitofrontal': 1014,
+                         'ctx-lh-middletemporal': 1015,
+                         'ctx-lh-parahippocampal': 1016,
+                         'ctx-lh-paracentral': 1017,
+                         'ctx-lh-parsopercularis': 1018,
+                         'ctx-lh-parsorbitalis': 1019,
+                         'ctx-lh-parstriangularis': 1020,
+                         'ctx-lh-pericalcarine': 1021,
+                         'ctx-lh-postcentral': 1022,
+                         'ctx-lh-posteriorcingulate': 1023,
+                         'ctx-lh-precentral': 1024,
+                         'ctx-lh-precuneus': 1025,
+                         'ctx-lh-rostralanteriorcingulate': 1026,
+                         'ctx-lh-rostralmiddlefrontal': 1027,
+                         'ctx-lh-superiorfrontal': 1028,
+                         'ctx-lh-superiorparietal': 1029,
+                         'ctx-lh-superiortemporal': 1030,
+                         'ctx-lh-supramarginal': 1031,
+                         'ctx-lh-frontalpole': 1032,
+                         'ctx-lh-temporalpole': 1033,
+                         'ctx-lh-transversetemporal': 1034,
+                         'ctx-lh-insula': 1035,
+                         'ctx-rh-bankssts': 2001,
+                         'ctx-rh-caudalanteriorcingulate': 2002,
+                         'ctx-rh-caudalmiddlefrontal': 2003,
+                         'ctx-rh-cuneus': 2005,
+                         'ctx-rh-entorhinal': 2006,
+                         'ctx-rh-fusiform': 2007,
+                         'ctx-rh-inferiorparietal': 2008,
+                         'ctx-rh-inferiortemporal': 2009,
+                         'ctx-rh-isthmuscingulate': 2010,
+                         'ctx-rh-lateraloccipital': 2011,
+                         'ctx-rh-lateralorbitofrontal': 2012,
+                         'ctx-rh-lingual': 2013,
+                         'ctx-rh-medialorbitofrontal': 2014,
+                         'ctx-rh-middletemporal': 2015,
+                         'ctx-rh-parahippocampal': 2016,
+                         'ctx-rh-paracentral': 2017,
+                         'ctx-rh-parsopercularis': 2018,
+                         'ctx-rh-parsorbitalis': 2019,
+                         'ctx-rh-parstriangularis': 2020,
+                         'ctx-rh-pericalcarine': 2021,
+                         'ctx-rh-postcentral': 2022,
+                         'ctx-rh-posteriorcingulate': 2023,
+                         'ctx-rh-precentral': 2024,
+                         'ctx-rh-precuneus': 2025,
+                         'ctx-rh-rostralanteriorcingulate': 2026,
+                         'ctx-rh-rostralmiddlefrontal': 2027,
+                         'ctx-rh-superiorfrontal': 2028,
+                         'ctx-rh-superiorparietal': 2029,
+                         'ctx-rh-superiortemporal': 2030,
+                         'ctx-rh-supramarginal': 2031,
+                         'ctx-rh-frontalpole': 2032,
+                         'ctx-rh-temporalpole': 2033,
+                         'ctx-rh-transversetemporal': 2034,
+                         'ctx-rh-insula': 2035}
+
+
+    regions = np.unique(nib.load(parcellation_file).get_data())[1:]
+    indices_to_retain = np.where(np.in1d(regions, regions_to_include.values()))
+
+    return indices_to_retain

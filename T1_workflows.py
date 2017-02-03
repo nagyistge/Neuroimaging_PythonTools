@@ -85,53 +85,6 @@ def run_FSL_anat(subject_list,base_directory,out_directory):
 	fsl_anat.write_graph()
 	fsl_anat.run('MultiProc')
 
-def GM_covariance_matrix(subject_list,base_directory,out_directory):
-	#==============================================================
-	# Loading required packages
-	import nipype.interfaces.io as nio
-	import nipype.pipeline.engine as pe
-	import nipype.interfaces.utility as util
-	from nipype import SelectFiles
-	import nipype.interfaces.fsl as fsl
-	import os
-	nodes = list()
-
-	reference = os.environ['FSLDIR'] + '/data/standard/MNI152_T1_1mm_brain.nii.gz'
-
-	#====================================
-	# Defining the nodes for the workflow
-
-	# Getting the subject ID
-	infosource  = pe.Node(interface=util.IdentityInterface(fields=['subject_id']),name='infosource')
-	infosource.iterables = ('subject_id', subject_list)
-
-	# Getting the relevant diffusion-weighted data
-	templates = dict(T1='{subject_id}/anat/{subject_id}_T1w.nii.gz')
-
-	selectfiles = pe.Node(SelectFiles(templates),
-	                   name="selectfiles")
-	selectfiles.inputs.base_directory = os.path.abspath(base_directory)
-	nodes.append(selectfiles)
-
-	# Removing non-brain tissue
-	bet = pe.Node(interface=fsl.BET(),name='bet')
-
-	# Transforming the T1 images to MNI space using FLIRT
-	flt = pe.Node(interface=fsl.FLIRT(dof=12,cost_func='corratio',reference=reference),name='flt')
-
-	# Setting up the workflow
-	covar_mat = pe.Workflow(name='Covar_Matrix')
-
-	# Reading in files
-	covar_mat.connect(infosource, 'subject_id', selectfiles, 'subject_id')
-	covar_mat.connect(selectfiles, 'T1', bet, 'in_file')
-	covar_mat.connect(bet, 'out_file', flt, 'in_file')
-
-	# Running the workflow
-	covar_mat.base_dir = os.path.abspath(out_directory)
-	covar_mat.write_graph()
-	covar_mat.run('PBSGraph')
-
 def ANTs_cortical_thickness(subject_list,directory):
 	"""
 
@@ -225,3 +178,5 @@ def coreg_with_FLIRT(subject_list,base_directory):
 	flt_coreg.base_dir = os.path.abspath(base_directory)
 	flt_coreg.write_graph()
 	flt_coreg.run('PBSGraph')
+
+def calculate_ICV
