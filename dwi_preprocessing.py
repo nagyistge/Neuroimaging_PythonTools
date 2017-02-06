@@ -12,11 +12,127 @@ def dwi_preproc(subject_list,base_directory,out_directory, index_file, acqparams
     MRC Cognition & Brain Sciences Unit
     joe.bathelt@mrc-cbu.cam.ac.uk
     """
+
+    # ==================================================================
+    # Defining additional nodes
+
+    from nipype.interfaces.base import BaseInterface
+    from nipype.interfaces.base import BaseInterfaceInputSpec
+    from nipype.interfaces.base import File
+    from nipype.interfaces.base import TraitedSpec
+
+    """
+    This function calculates additional DTI measures, i.e. AD and RD, that
+    FSL dtifi does not automatically generate
+    """
+
+    class AdditionalDTIMeasuresInputSpec(BaseInterfaceInputSpec):
+        L1 = File(exists=True, desc='First eigenvalue image', mandatory=True)
+        L2 = File(exists=True, desc='Second eigenvalue image', mandatory=True)
+        L3 = File(exists=True, desc='Third eigenvalue image', mandatory=True)
+
+
+    class AdditionalDTIMeasuresOutputSpec(TraitedSpec):
+        AD = File(exists=True, desc="axial diffusivity (AD) image")
+        RD = File(exists=True, desc="radial diffusivity (RD) image")
+
+
+    class AdditionalDTIMeasures(BaseInterface):
+        input_spec = AdditionalDTIMeasuresInputSpec
+        output_spec = AdditionalDTIMeasuresOutputSpec
+
+        def _run_interface(self, runtime):
+            import nibabel as nib
+            from nipype.utils.filemanip import split_filename
+
+            L1 = nib.load(self.inputs.L1).get_data()
+            L2 = nib.load(self.inputs.L2).get_data()
+            L3 = nib.load(self.inputs.L3).get_data()
+            affine = nib.load(self.inputs.L1).get_affine()
+
+            RD = (L2 + L3) / 2
+
+            fname = self.inputs.L1
+            _, base, _ = split_filename(fname)
+            nib.save(nib.Nifti1Image(L1, affine), base + '_AD.nii.gz')
+            nib.save(nib.Nifti1Image(RD, affine), base + '_RD.nii.gz')
+            return runtime
+
+        def _list_outputs(self):
+            from nipype.utils.filemanip import split_filename
+            import os
+            outputs = self._outputs().get()
+            fname = self.inputs.L1
+            _, base, _ = split_filename(fname)
+            outputs["AD"] = os.path.abspath(base + '_AD.nii.gz')
+            outputs["RD"] = os.path.abspath(base + '_RD.nii.gz')
+            return outputs
+
+
+    # ==================================================================
+    """
+    Denoising with non-local means
+    This function is based on the example in the Dipy preprocessing tutorial:
+    http://nipy.org/dipy/examples_built/denoise_nlmeans.html#example-denoise-nlmeans
+    """
+
+    class DipyDenoiseInputSpec(BaseInterfaceInputSpec):
+        in_file = File(
+            exists=True, desc='diffusion weighted volume for denoising', mandatory=True)
+
+
+    class DipyDenoiseOutputSpec(TraitedSpec):
+        out_file = File(exists=True, desc="denoised diffusion-weighted volume")
+
+
+    class DipyDenoise(BaseInterface):
+        input_spec = DipyDenoiseInputSpec
+        output_spec = DipyDenoiseOutputSpec
+
+        def _run_interface(self, runtime):
+            import nibabel as nib
+            import numpy as np
+            from dipy.denoise.nlmeans import nlmeans
+            from nipype.utils.filemanip import split_filename
+
+            fname = self.inputs.in_file
+            img = nib.load(fname)
+            data = img.get_data()
+            affine = img.get_affine()
+            mask = data[..., 0] > 80
+            a = data.shape
+
+            denoised_data = np.ndarray(shape=data.shape)
+            for image in range(0, a[3]):
+                print(str(image + 1) + '/' + str(a[3] + 1))
+                dat = data[..., image]
+                # Calculating the standard deviation of the noise
+                sigma = np.std(dat[~mask])
+                den = nlmeans(dat, sigma=sigma, mask=mask)
+                denoised_data[:, :, :, image] = den
+
+            _, base, _ = split_filename(fname)
+            nib.save(nib.Nifti1Image(denoised_data, affine),
+                     base + '_denoised.nii.gz')
+
+            return runtime
+
+        def _list_outputs(self):
+            from nipype.utils.filemanip import split_filename
+            import os
+            outputs = self._outputs().get()
+            fname = self.inputs.in_file
+            _, base, _ = split_filename(fname)
+            outputs["out_file"] = os.path.abspath(base + '_denoised.nii.gz')
+            return outputs
+
+    #==============================================================
+
+    # Main pipeline
+
     #==============================================================
     # Loading required packages
     from nipype import SelectFiles
-    from additional_interfaces import AdditionalDTIMeasures
-    from additional_interfaces import DipyDenoise
     import nipype.interfaces.fsl as fsl
     import nipype.interfaces.io as nio
     import nipype.pipeline.engine as pe
