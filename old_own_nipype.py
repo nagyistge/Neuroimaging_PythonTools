@@ -1,7 +1,7 @@
-from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, InputMultiPath, traits, File, TraitedSpec
+from nipype.interfaces.base import BaseInterface, BaseInterfaceInputSpec, CommandLineInputSpec, CommandLine, traits, File, TraitedSpec
 from nipype.interfaces.matlab import MatlabCommand
 
-#=======================================================================
+#==================================================================================================
 # Denoising with non-local means
 # This function is based on the example in the Dipy preprocessing tutorial:
 # http://nipy.org/dipy/examples_built/denoise_nlmeans.html#example-denoise-nlmeans
@@ -19,6 +19,7 @@ class DipyDenoise(BaseInterface):
 	def _run_interface(self, runtime):
 		import nibabel as nib
 		import numpy as np
+		import matplotlib.pyplot as plt
 		from dipy.denoise.nlmeans import nlmeans
 		from nipype.utils.filemanip import split_filename
 
@@ -51,24 +52,26 @@ class DipyDenoise(BaseInterface):
 		outputs["out_file"] = os.path.abspath(base + '_denoised.nii')
 		return outputs
 
-#=======================================================================
-# Denoising with non-local means for 3D images
+#==================================================================================================
+# Denoising with non-local means
 # This function is based on the example in the Dipy preprocessing tutorial:
 # http://nipy.org/dipy/examples_built/denoise_nlmeans.html#example-denoise-nlmeans
 
-class DipyDenoiseT1InputSpec(BaseInterfaceInputSpec):
+class T1DipyDenoiseInputSpec(BaseInterfaceInputSpec):
 	in_file = File(exists=True, desc='diffusion weighted volume for denoising', mandatory=True)
+	in_mask = File(exists=True, desc='binary brain mask file', mandatory=True)
 
-class DipyDenoiseT1OutputSpec(TraitedSpec):
+class T1DipyDenoiseOutputSpec(TraitedSpec):
 	out_file = File(exists=True, desc="denoised diffusion-weighted volume")
 
-class DipyDenoiseT1(BaseInterface):
-	input_spec = DipyDenoiseT1InputSpec
-	output_spec = DipyDenoiseT1OutputSpec
+class T1DipyDenoise(BaseInterface):
+	input_spec = T1DipyDenoiseInputSpec
+	output_spec = T1DipyDenoiseOutputSpec
 
 	def _run_interface(self, runtime):
 		import nibabel as nib
 		import numpy as np
+		import matplotlib.pyplot as plt
 		from dipy.denoise.nlmeans import nlmeans
 		from nipype.utils.filemanip import split_filename
 
@@ -76,10 +79,14 @@ class DipyDenoiseT1(BaseInterface):
 		img = nib.load(fname)
 		data = img.get_data()
 		affine = img.get_affine()
-		mask = data > 20
 
+		mask_fname = self.inputs.in_mask
+		mask_img = nib.load(mask_fname)]
+		mask = mask_img.get_data()
 		sigma = np.std(data[~mask]) # Calculating the standard deviation of the noise
-		denoised_data = nlmeans(data, sigma=sigma, mask=mask)
+
+	    denoised_data = nlmeans(data, sigma=sigma, mask=mask)
+	    denoised_data[:,:,:,image] = den
 
 		_, base, _ = split_filename(fname)
 		nib.save(nib.Nifti1Image(denoised_data, affine), base + '_denoised.nii')
@@ -95,7 +102,7 @@ class DipyDenoiseT1(BaseInterface):
 		outputs["out_file"] = os.path.abspath(base + '_denoised.nii')
 		return outputs
 
-#=======================================================================
+#==================================================================================================
 # Fitting the Tensor models with RESTORE
 
 class DipyRestoreInputSpec(BaseInterfaceInputSpec):
@@ -433,7 +440,9 @@ class FAconnectomeInputSpec(BaseInterfaceInputSpec):
 	output_file = File("FA_matrix.txt", desc="Adjacency matrix of ROIs with FA as conenction weight", usedefault=True)
 
 class FAconnectomeOutputSpec(TraitedSpec):
-	out_file = File(exists=True, desc="connectivity matrix of FA between each pair of ROIs")
+	FA_matrix = File(exists=True, desc="connectivity matrix of FA between each pair of ROIs")
+	density_matrix = File(exists=True, desc="connectivity matrix with number of streamlines between ROIs as weight")
+	density_corrected_matrix = File(exists=True, desc="connectivity matrix with number of streamlines between ROIs as weight corrected for the sum of volumes of both ROIs")
 
 class FAconnectome(BaseInterface):
 	input_spec = FAconnectomeInputSpec
@@ -441,58 +450,106 @@ class FAconnectome(BaseInterface):
 
 	def _run_interface(self, runtime):
 		# Loading the ROI file
-	    import nibabel as nib
-	    import numpy as np
-	    from dipy.tracking import utils
+		import nibabel as nib
+		import numpy as np
+		from dipy.tracking import utils
+		import os
+		import pandas as pd
 
-	    img = nib.load(self.inputs.ROI_file)
-	    data = img.get_data()
-	    affine = img.get_affine()
+		img = nib.load(self.inputs.ROI_file)
+		data = img.get_data()
+		affine = img.get_affine()
 
-	    # Getting the FA file
-	    img = nib.load(self.inputs.FA_file)
-	    FA_data = img.get_data()
-	    FA_affine = img.get_affine()
+	    # Getting ROI volumes if they haven't been generated
+		if not os.path.isfile('/imaging/jb07/CALM/DWI/FA_connectome/Atlas_volumes.csv'):
+			import nibabel as nib
+			import numpy as np
+			import os
+			import pandas as pd
+			import subprocess
 
-	    # Loading the streamlines
-	    from nibabel import trackvis
-	    streams, hdr = trackvis.read(self.inputs.trackfile,points_space='rasmm')
-	    streamlines = [s[0] for s in streams]
-	    streamlines_affine = trackvis.aff_from_hdr(hdr,atleast_v2=True)
+			atlas_file = ROI_file
+			img = nib.load(self.inputs.atlas_file)
+			data = img.get_data()
+			affine = img.get_affine()
+			volumes = pd.DataFrame()
 
-	    # Checking for negative values
-	    from dipy.tracking._utils import _mapping_to_voxel, _to_voxel_coordinates
-	    endpoints = [sl[0::len(sl)-1] for sl in streamlines]
-	    lin_T, offset = _mapping_to_voxel(affine, (1.,1.,1.))
-	    inds = np.dot(endpoints, lin_T)
-	    inds += offset
-	    negative_values = np.where(inds <0)[0]
-	    for negative_value in sorted(negative_values, reverse=True):
+			atlas_labels = np.unique(data)
+
+			for atlas_label in atlas_labels:
+				data = nib.load((self.inputs.atlas_file)).get_data()
+				data[data != atlas_label] = 0
+				data[data == atlas_label] = 1
+				nib.save(nib.Nifti1Image(data, affine), 'temp.nii.gz')
+				volumes.set_value(atlas_label, 'volume', subprocess.check_output(os.environ['FSLDIR'] + '/bin/fslstats temp.nii.gz -V', shell=True).split(' ')[0])
+
+			os.remove('temp.nii.gz')
+			volumes.to_csv('/imaging/jb07/CALM/DWI/FA_connectome/Atlas_volumes.csv')
+
+		ROI_volumes = pd.read_csv('/imaging/jb07/CALM/DWI/FA_connectome/Atlas_volumes.csv')
+
+		# Getting the FA file
+		img = nib.load(self.inputs.FA_file)
+		FA_data = img.get_data()
+		FA_affine = img.get_affine()
+
+		# Loading the streamlines
+		from nibabel import trackvis
+		streams, hdr = trackvis.read(self.inputs.trackfile,points_space='rasmm')
+		streamlines = [s[0] for s in streams]
+		streamlines_affine = trackvis.aff_from_hdr(hdr,atleast_v2=True)
+
+		# Checking for negative values
+		from dipy.tracking._utils import _mapping_to_voxel, _to_voxel_coordinates
+		endpoints = [sl[0::len(sl)-1] for sl in streamlines]
+		lin_T, offset = _mapping_to_voxel(affine, (1.,1.,1.))
+		inds = np.dot(endpoints, lin_T)
+		inds += offset
+		negative_values = np.where(inds <0)[0]
+		for negative_value in sorted(negative_values, reverse=True):
 			del streamlines[negative_value]
 
-	    # Constructing the streamlines matrix
-	    matrix,mapping = utils.connectivity_matrix(streamlines=streamlines,label_volume=data,affine=streamlines_affine,symmetric=True,return_mapping=True,mapping_as_streamlines=True)
-	    matrix[matrix < 10] = 0
+		# Constructing the streamlines matrix
+		matrix,mapping = utils.connectivity_matrix(streamlines=streamlines,label_volume=data,affine=streamlines_affine,symmetric=True,return_mapping=True,mapping_as_streamlines=True)
+		matrix[matrix < 10] = 0
 
-	    # Constructing the FA matrix
-	    dimensions = matrix.shape
-	    FA_matrix = np.empty(shape=dimensions)
+		# Constructing the FA matrix
+		dimensions = matrix.shape
+		FA_matrix = np.empty(shape=dimensions)
+		density_matrix = np.empty(shape=dimensions)
+		density_corrected_matrix = np.empty(shape=dimensions)
 
-	    for i in range(0,dimensions[0]):
-	        for j in range(0,dimensions[1]):
-	            if matrix[i,j]:
-	                dm = utils.density_map(mapping[i,j], FA_data.shape, affine=streamlines_affine)
-            		FA_matrix[i,j] = np.mean(FA_data[dm>0])
-	            else:
-	                FA_matrix[i,j] = 0
+		for i in range(0,dimensions[0]):
+		    for j in range(0,dimensions[1]):
+		        if matrix[i,j]:
+		            dm = utils.density_map(mapping[i,j], FA_data.shape, affine=streamlines_affine)
+		            FA_matrix[i,j] = np.mean(FA_data[dm>0])
+		            if np.sum(dm > 0) > 0:
+		            	density_matrix[i,j] = np.sum(dm[dm > 0])
+		            	density_corrected_matrix[i,j] = float(np.sum(dm[dm > 0]))/np.sum([ROI_volumes.iloc[i].values.astype('float'), ROI_volumes.iloc[j].values.astype('float')])
+		            else:
+		            	density_matrix[i,j] = 0
+		            	density_corrected_matrix[i,j] = 0
+		        else:
+		            FA_matrix[i,j] = 0
+		            density_matrix[i,j] = 0
+		            density_corrected_matrix[i,j] = 0
 
-	    FA_matrix[np.tril_indices(n=len(FA_matrix))] = 0
-	    FA_matrix = FA_matrix.T + FA_matrix - np.diagonal(FA_matrix)
+		FA_matrix[np.tril_indices(n=len(FA_matrix))] = 0
+		FA_matrix = FA_matrix.T + FA_matrix - np.diagonal(FA_matrix)
 
-	    from nipype.utils.filemanip import split_filename
-	    _, base, _ = split_filename(self.inputs.trackfile)
-	    np.savetxt(base + '_FA_matrix.txt',FA_matrix,delimiter='\t')
-	    return runtime
+		density_matrix[np.tril_indices(n=len(density_matrix))] = 0
+		density_matrix = density_matrix.T + density_matrix - np.diagonal(density_matrix)
+
+		density_corrected_matrix[np.tril_indices(n=len(density_corrected_matrix))] = 0
+		density_corrected_matrix = density_corrected_matrix.T + density_corrected_matrix - np.diagonal(density_corrected_matrix)
+
+		from nipype.utils.filemanip import split_filename
+		_, base, _ = split_filename(self.inputs.trackfile)
+		np.savetxt(base + '_FA_matrix.txt',FA_matrix,delimiter='\t')
+		np.savetxt(base + '_density_matrix.txt',density_matrix,delimiter='\t')
+		np.savetxt(base + '_volume_corrected_density_matrix.txt',density_corrected_matrix,delimiter='\t')
+		return runtime
 
 	def _list_outputs(self):
 		from nipype.utils.filemanip import split_filename
@@ -500,7 +557,9 @@ class FAconnectome(BaseInterface):
 		outputs = self._outputs().get()
 		fname = self.inputs.trackfile
 		_, base, _ = split_filename(fname)
-		outputs["out_file"] = os.path.abspath(base + '_FA_matrix.txt')
+		outputs["FA_matrix"] = os.path.abspath(base + '_FA_matrix.txt')
+		outputs["density_matrix"] = os.path.abspath(base + '_density_matrix.txt')
+		outputs["density_corrected_matrix"] = os.path.abspath(base + '_volume_corrected_density_matrix.txt')
 		return outputs
 
 
@@ -578,7 +637,8 @@ class WaveletDespikeInputSpec(BaseInterfaceInputSpec):
     out_folder = File(mandatory=True)
 
 class WaveletDespikeOutputSpec(TraitedSpec):
-    out_folder = File(exists=True)
+    out_file = File(exists=True)
+    out_noise = File(exists=True)
 
 class WaveletDespike(BaseInterface):
     input_spec = WaveletDespikeInputSpec
@@ -588,20 +648,25 @@ class WaveletDespike(BaseInterface):
         d = dict(in_file=self.inputs.in_file,
         out_folder=self.inputs.out_folder,
         subject_id=self.inputs.subject_id)
-        #this is your MATLAB code template
         script = Template("""
-        	cd '$out_folder'
-        	WaveletDespike('$in_file','$subject_id')""").substitute(d)
-
-        mlab = MatlabCommand(script=script, mfile=True)
+            WaveletDespike('$in_file','$subject_id','LimitRAM',4)""").substitute(d)
+        mlab = MatlabCommand(script=script,
+         					mfile=True,
+          					nodesktop=True,
+           					nosplash=True,
+            				logfile='/imaging/jb07/matlab_log.txt')
         result = mlab.run()
         return result.runtime
 
     def _list_outputs(self):
-        outputs = self._outputs().get()
-        outputs['out_file'] = os.path.abspath(self.inputs.out_folder)
-        return outputs
-
+		from nipype.utils.filemanip import split_filename
+		import os
+		outputs = self._outputs().get()
+		fname = self.inputs.in_file
+		_, base, _ = split_filename(fname)
+		outputs["out_file"] = os.path.abspath(base.split('_')[0] + '_wds.nii.gz')
+		outputs["out_noise"] = os.path.abspath(base.split('_')[0] + '_noise.nii.gz')
+		return outputs
 
 #==================================================================================================
 # Calling ANTs Quick Registration with SyN
@@ -625,47 +690,6 @@ class ants_QuickSyNOutputSpec(TraitedSpec):
 	transform_matrix = File(desc="Outputs affine transform matrix")
 
 class ants_QuickSyN(CommandLine):
-	input_spec = ants_QuickSyNInputSpec
-	output_spec = ants_QuickSyNOutputSpec
-
-	_cmd = "antsRegistrationSyNQuick.sh"
-
-	def _list_outputs(self):
-		from nipype.utils.filemanip import split_filename
-		import os
-		outputs = self._outputs().get()
-		outputs['deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1Warp.nii.gz')
-		outputs['inverse_deformation_warp_image'] = os.path.abspath(self.inputs.output_prefix + '_1InverseWarp.nii.gz')
-		outputs['warped_image'] = os.path.abspath(self.inputs.output_prefix + '_Warped.nii.gz')
-		outputs['inverse_warped_image'] = os.path.abspath(self.inputs.output_prefix + '_InverseWarped.nii.gz')
-		outputs['transform_matrix'] = os.path.abspath(self.inputs.output_prefix + '_0GenericAffine.mat')
-		return outputs
-
-#==================================================================================================
-# Calling ANTs Apply Transform
-class ants_applyQuickSyNInputSpec(CommandLineInputSpec):
-	input_file = File(exists=True, desc='File name of the input image', argstr="-i %s")
-	reference_image = File(exists=True, desc='For warping input images, the reference image defines the spacing, origin, size, and direction of the output warped image.',
-						mandatory=True, argstr="-r %s")
-	output_prefix = traits.Str(desc='OutputPrefix: A prefix that is prepended to all output files',
-		mandatory=True, argstr="-o %s_")
-	interpolation = traits.Str(desc='one of Linear, NearestNeighbor, MultiLabel[<sigma=imageSpacing>,<alpha=4.0>], Gaussian[<sigma=imageSpacing>,<alpha=1.0>], BSpline[<order=3>], CosineWindowedSinc, WelchWindowedSinc, HammingWindowedSinc, LanczosWindowedSinc',
-								mandatory=True, argstr="-n %s")
-	transform = traits.Str(desc='transform files in order of application',
-						 mandatory=True, argstr="-t %s")
-	image_dimensions = traits.Enum(1,3, desc='ImageDimension: 2 or 3 (for 2 or 3 dimensional registration of single volume)',
-		mandatory=True, argstr="-d %d")
-	input_image_type = traits.Enum(0,3, desc='Option specifying the input image type of scalar (default), vector, tensor, or time series',
-		mandatory=True, argstr="-e %d")
-
-class ants_applyQuickSyNOutputSpec(TraitedSpec):
-	deformation_warp_image = File(desc="Outputs deformation warp image")
-	inverse_deformation_warp_image = File(desc="Outputs inverse deformation warp image")
-	warped_image = File(desc="Outputs warped images")
-	inverse_warped_image = File(desc="Outputs the inverse of the warped image")
-	transform_matrix = File(desc="Outputs affine transform matrix")
-
-class ants_applyQuickSyN(CommandLine):
 	input_spec = ants_QuickSyNInputSpec
 	output_spec = ants_QuickSyNOutputSpec
 
@@ -820,165 +844,4 @@ class GM_DENSITY(BaseInterface):
 		fname = self.inputs.in_file
 		_, base, _ = split_filename(fname)
 		outputs["out_file"] = os.path.abspath(base + '_gm_density.nii.gz')
-		return outputs
-
-# ======================================================================
-# Calculate the overlap between two masks
-
-class ImageOverlapInputSpec(BaseInterfaceInputSpec):
-	in_file1 = File(exists=True, desc='input  image file', mandatory=True)
-	in_file2 = traits.String(desc='input  image file', mandatory=True)
-
-class ImageOverlapOutputSpec(TraitedSpec):
-	out_file = File(desc="overlap image")
-
-class ImageOverlap(BaseInterface):
-	input_spec = ImageOverlapInputSpec
-	output_spec = ImageOverlapOutputSpec
-
-	def _run_interface(self, runtime):
-		import nibabel as nib
-		from nipype.utils.filemanip import split_filename
-
-		in_file1 = nib.load(self.inputs.in_file1).get_data()
-		in_file2 = nib.load(self.inputs.in_file2).get_data()
-		in_file1[in_file1 > 0] = 1 # binarzing the image
-		in_file2[in_file2 > 0] = 1 # binarzing the image
-		overlap = in_file1*in_file2
-		overlap[overlap > 0] = 1
-
-		# Saving the result to disk
-		outputs = self._outputs().get()
-		fname = self.inputs.in_file1
-		_, base, _ = split_filename(fname)
-		nib.save(nib.Nifti1Image(overlap, nib.load(self.inputs.in_file1).get_affine()), os.path.abspath(base + '_overlap.nii.gz'))
-
-		return runtime
-
-	def _list_outputs(self):
-		from nipype.utils.filemanip import split_filename
-		import os
-		outputs = self._outputs().get()
-		fname = self.inputs.in_file1
-		_, base, _ = split_filename(fname)
-		outputs["out_file"] = os.path.abspath(base + '_overlap.nii.gz')
-		return outputs
-
-# ======================================================================
-# This function calculates additional DTI measures, i.e. AD and RD, that FSL dtifi does not automatically generate
-
-class AdditionalDTIMeasuresInputSpec(BaseInterfaceInputSpec):
-    L1 = File(exists=True, desc='First eigenvalue image', mandatory=True)
-    L2 = File(exists=True, desc='Second eigenvalue image', mandatory=True)
-    L3 = File(exists=True, desc='Third eigenvalue image', mandatory=True)
-
-class AdditionalDTIMeasuresOutputSpec(TraitedSpec):
-    AD = File(exists=True, desc="axial diffusivity (AD) image")
-    RD = File(exists=True, desc="radial diffusivity (RD) image")
-
-class AdditionalDTIMeasures(BaseInterface):
-    input_spec = AdditionalDTIMeasuresInputSpec
-    output_spec = AdditionalDTIMeasuresOutputSpec
-
-    def _run_interface(self, runtime):
-    	import nibabel as nib
-        from nipype.utils.filemanip import split_filename
-
-
-        L1 = nib.load(self.inputs.L1).get_data()
-        L2 = nib.load(self.inputs.L2).get_data()
-        L3 = nib.load(self.inputs.L3).get_data()
-        affine = nib.load(self.inputs.L1).get_affine()
-
-        RD = (L2 + L3)/2
-
-        fname = self.inputs.L1
-        _, base, _ = split_filename(fname)
-        nib.save(nib.Nifti1Image(L1, affine), base + '_AD.nii.gz')
-        nib.save(nib.Nifti1Image(RD, affine), base + '_RD.nii.gz')
-        return runtime
-
-    def _list_outputs(self):
-        from nipype.utils.filemanip import split_filename
-        import os
-        outputs = self._outputs().get()
-        fname = self.inputs.L1
-        _, base, _ = split_filename(fname)
-        outputs["AD"] = os.path.abspath(base + '_AD.nii.gz')
-        outputs["RD"] = os.path.abspath(base + '_RD.nii.gz')
-        return outputs
-
-# ======================================================================
-"""
-Rename files when a skull-stripped image is used in the recon-all pipeline
-"""
-
-class FSRenameInputSpec(BaseInterfaceInputSpec):
-    subjects_dir = traits.String(
-        desc='FreeSurfer subjects directory', mandatory=True)
-    subject_id = traits.String(desc='subject ID', mandatory=True)
-
-
-class FSRenameOutputSpec(TraitedSpec):
-    brainmaskauto = File(exists=True, desc="thresholded volume")
-    brainmask = File(exists=True, desc="thresholded volume")
-
-
-class FSRename(BaseInterface):
-    input_spec = FSRenameInputSpec
-    output_spec = FSRenameOutputSpec
-
-    def _run_interface(self, runtime):
-        import shutil
-
-        subjects_dir = self.inputs.subjects_dir
-        subject_id = self.inputs.subject_id
-
-        shutil.copyfile(subjects_dir + '/' + subject_id + '/mri/T1.mgz',
-                        subjects_dir + '/' + subject_id + subject_id + '/mri/brainmask.auto.mgz')
-
-        shutil.copyfile(subjects_dir + '/' + subject_id + subject_id + '/mri/T1.mgz', subjects_dir + '/' + subject_id + '/mri/brainmask.mgz')
-
-        return runtime
-
-    def _list_outputs(self):
-        import os
-
-        outputs = self._outputs().get()
-        subjects_dir = self.inputs.subjects_dir
-        subject_id = self.inputs.subject_id
-        outputs["brainmaskauto"] = os.path.abspath(
-           subjects_dir + '/' + subject_id + '/mri/brainmask.auto.mgz')
-        outputs["brainmask"] = os.path.abspath(subjects_dir + '/' + subject_id  + '/mri/brainmask.mgz')
-        return outputs
-
-# ======================================================================
-# Calculating the gyrification index from FreeSurfer
-
-class FS_Gyrification_InputSpec(BaseInterfaceInputSpec):
-	subject_id = traits.String(desc='FreeSurfer subject ID', mandatory=True)
-	subjects_dir = traits.String(desc='FreeSurfer subject directory generated by recon-all', mandatory=True)
-
-class FS_Gyrification_OutputSpec(TraitedSpec):
-	lh_gyr = File(exists=True, desc="gyrfication surface morphology for the left hemisphere")
-	rh_gyr = File(exists=True, desc="gyrfication surface morphology for the right hemisphere")
-
-class FS_Gyrification(BaseInterface):
-	input_spec = FS_Gyrification_InputSpec
-	output_spec = FS_Gyrification_OutputSpec
-
-	def _run_interface(self, runtime):
-		from subprocess import call
-
-		cmd = "recon-all -localGI -s " + self.inputs.subject_id + ' -sd ' + self.inputs.subjects_dir
-		call(cmd, shell=True)
-
-		return runtime
-
-	def _list_outputs(self):#
-		outputs = self._outputs().get()
-		subject_directory = self.inputs.subjects_dir
-		subject_id = self.inputs.subject_id
-		outputs['lh_gyr'] = os.path.abspath(subject_directory + '/' +subject_id + '/surf/lh.pial_lgi')
-		outputs['rh_gyr'] = os.path.abspath(subject_directory + '/' + subject_id + '/surf/rh.pial_lgi')
 		return outputs

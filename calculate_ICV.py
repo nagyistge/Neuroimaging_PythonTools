@@ -23,47 +23,47 @@ def main():
     subject_list = [subject for subject in subject_list.split(
         ',') if subject]
 
-    # ==================================================================
-    # Additional interfaces
-    from nipype.interfaces.base import BaseInterface
-    from nipype.interfaces.base import BaseInterfaceInputSpec
-    from nipype.interfaces.base import File
-    from nipype.interfaces.base import traits
-    from nipype.interfaces.base import TraitedSpec
+# ==================================================================
+# Additional interfaces
+from nipype.interfaces.base import BaseInterface
+from nipype.interfaces.base import BaseInterfaceInputSpec
+from nipype.interfaces.base import File
+from nipype.interfaces.base import traits
+from nipype.interfaces.base import TraitedSpec
 
-    class SIENAXInputSpec(BaseInterfaceInputSpec):
-            in_file = File(desc = "Input volume", exists = True,
-                                mandatory = True, position = 0, argstr="%s")
-            bet_options = traits.String(desc = "options to pass to BET brain extraction (inside double-quotes), e.g. -B '-f 0.3'", mandatory = False, position = 1, argstr="-B %s")
-            output_folder = traits.File(desc = "set output directory (default output is <input>_sienax)", mandatory = True, position = 2, argstr="-o %s")
+class SIENAXInputSpec(BaseInterfaceInputSpec):
+        in_file = File(desc = "Input volume", exists = True,
+                            mandatory = True, position = 0, argstr="%s")
+        bet_options = traits.String(desc = "options to pass to BET brain extraction (inside double-quotes), e.g. -B '-f 0.3'", mandatory = False, position = 1, argstr="-B %s")
+        output_folder = traits.File(desc = "set output directory (default output is <input>_sienax)", mandatory = True, position = 2, argstr="-o %s")
 
-    class SIENAXOutputSpec(TraitedSpec):
-            report = File(desc = "sienax report", exists = True)
+class SIENAXOutputSpec(TraitedSpec):
+        report = File(desc = "sienax report", exists = True)
 
-    class SIENAX(BaseInterface):
-        input_spec = SIENAXInputSpec
-        output_spec = SIENAXOutputSpec
+class SIENAX(BaseInterface):
+    input_spec = SIENAXInputSpec
+    output_spec = SIENAXOutputSpec
 
-        def _run_interface(self, runtime):
-            from subprocess import call
-            in_file = self.inputs.in_file
-            bet_options = self.inputs.bet_options
-            output_folder = self.inputs.output_folder
+    def _run_interface(self, runtime):
+        from subprocess import call
+        in_file = self.inputs.in_file
+        bet_options = self.inputs.bet_options
+        output_folder = self.inputs.output_folder
 
-            string = 'sienax ' + in_file + \
-            '-o ' + output_folder
+        string = 'sienax ' + in_file + \
+        '-o ' + output_folder
 
-            if bet_options:
-                string = string + ' -B ' + bet_options
+        if bet_options:
+            string = string + ' -B ' + bet_options
 
-            call(string, shell=True)
-            return runtime
+        call(string, shell=True)
+        return runtime
 
-        def _list_outputs(self):
-            import os
-            outputs = self.output_spec().get()
-            outputs['report'] = os.path.abspath(self.inputs.output_folder + 'report.sienax')
-            return outputs
+    def _list_outputs(self):
+        import os
+        outputs = self.output_spec().get()
+        outputs['report'] = os.path.abspath(self.inputs.output_folder + 'report.sienax')
+        return outputs
 
     # ==================================================================
     # Main workflow

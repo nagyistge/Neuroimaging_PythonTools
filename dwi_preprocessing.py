@@ -1,4 +1,4 @@
-def dwi_preproc(subject_list,base_directory,out_directory, index_file, acqparams):
+def dwi_preproc(subject_list, base_directory, out_directory, index_file, acqparams):
     """
     This function implements the dwi preprocessing workflow. The function takes a list of subject IDs and their parent directory - the data is expected to be stored according to the Brain Imaging Data Structure (BIDS).
     It then performs the preprocessing steps: denoising with non-local means (http://nipy.org/dipy/examples_built/denoise_nlmeans.html), FSL eddy_correct to correct for eddy current and participant motion, resampling to 1mm isotropic resolution with trilinear interpolation, extraction of the first b0 volume, brain extraction with FSL bet, and fitting of the diffusion tensor model with FSL dtifit
